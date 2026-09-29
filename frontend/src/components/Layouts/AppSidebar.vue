@@ -127,7 +127,7 @@
           </SidebarItem>
           <!-- Support links as a compact icon row (mirrors LMS), stacking when collapsed. -->
           <div
-            class="mt-1 flex gap-3 px-2"
+            class="mt-4 flex gap-3 px-2"
             :class="
               isCollapsed ? 'flex-col items-start' : 'flex-row items-center'
             "
@@ -157,17 +157,10 @@
               />
             </Tooltip>
           </div>
-          <SidebarItem
-            :label="isCollapsed ? __('Expand') : __('Collapse')"
-            @click="isSidebarCollapsed = !isSidebarCollapsed"
-          >
-            <template #prefix>
-              <CollapseSidebar
-                class="size-4 text-ink-gray-7 duration-300 ease-in-out"
-                :class="{ '[transform:rotateY(180deg)]': isCollapsed }"
-              />
-            </template>
-          </SidebarItem>
+          <SidebarCollapseToggle
+            class="mt-1"
+            :aria-label="isCollapsed ? __('Expand') : __('Collapse')"
+          />
         </div>
       </div>
     </Sidebar>
@@ -217,7 +210,6 @@ import NoteIcon from '@/components/Icons/NoteIcon.vue'
 import OrganizationsIcon from '@/components/Icons/OrganizationsIcon.vue'
 import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
 import TaskIcon from '@/components/Icons/TaskIcon.vue'
-import CollapseSidebar from '@/components/Icons/CollapseSidebar.vue'
 import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
 import Notifications from '@/components/Notifications.vue'
 import Settings from '@/components/Settings/Settings.vue'
@@ -236,7 +228,14 @@ import {
 } from '@/composables/settings'
 import { showChangePasswordModal } from '@/composables/modals'
 import { useBroadcast } from '@/composables/useBroadcast.js'
-import { call, Sidebar, SidebarItem, SidebarLabel, Tooltip } from 'frappe-ui'
+import {
+  call,
+  Sidebar,
+  SidebarCollapseToggle,
+  SidebarItem,
+  SidebarLabel,
+  Tooltip,
+} from 'frappe-ui'
 import {
   SignupBanner,
   TrialBanner,
