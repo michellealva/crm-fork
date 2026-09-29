@@ -156,10 +156,13 @@
                 @click="openContactUs"
               />
             </Tooltip>
-            <SidebarCollapseToggle
-              :class="isCollapsed ? 'mt-2' : 'ml-auto'"
-              :aria-label="isCollapsed ? __('Expand') : __('Collapse')"
-            />
+            <Tooltip :text="isCollapsed ? __('Expand') : __('Collapse')">
+              <span
+                class="lucide-panel-right-open size-4 cursor-pointer text-ink-gray-7 transition-transform duration-300 ease-in-out hover:text-ink-gray-9"
+                :class="isCollapsed ? 'mt-2 rotate-180' : 'ml-auto'"
+                @click="isSidebarCollapsed = !isSidebarCollapsed"
+              />
+            </Tooltip>
           </div>
         </div>
       </div>
@@ -228,14 +231,7 @@ import {
 } from '@/composables/settings'
 import { showChangePasswordModal } from '@/composables/modals'
 import { useBroadcast } from '@/composables/useBroadcast.js'
-import {
-  call,
-  Sidebar,
-  SidebarCollapseToggle,
-  SidebarItem,
-  SidebarLabel,
-  Tooltip,
-} from 'frappe-ui'
+import { call, Sidebar, SidebarItem, SidebarLabel, Tooltip } from 'frappe-ui'
 import {
   SignupBanner,
   TrialBanner,
