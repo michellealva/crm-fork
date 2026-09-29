@@ -156,11 +156,11 @@
                 @click="openContactUs"
               />
             </Tooltip>
+            <SidebarCollapseToggle
+              :class="isCollapsed ? 'mt-2' : 'ml-auto'"
+              :aria-label="isCollapsed ? __('Expand') : __('Collapse')"
+            />
           </div>
-          <SidebarCollapseToggle
-            class="mt-1"
-            :aria-label="isCollapsed ? __('Expand') : __('Collapse')"
-          />
         </div>
       </div>
     </Sidebar>
