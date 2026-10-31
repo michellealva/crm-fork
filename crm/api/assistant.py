@@ -1,7 +1,8 @@
 # Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and contributors
 # For license information, please see license.txt
 
-"""CRM setup actions for Flow's assistant; loaded only when Flow is installed (see hooks.flow_tools)."""
+"""CRM actions for the site's assistant. Its skills call them with `frappe.call`, so each runs with the
+user's own permissions, like any other whitelisted method."""
 
 import json
 import re
@@ -10,12 +11,6 @@ from typing import Any, Literal
 import frappe
 from frappe import _
 from pydantic import BaseModel
-
-try:
-	# Flow ships in the framework from Frappe 17
-	from frappe.flow import ToolContext, tool
-except ImportError:
-	from flow import ToolContext, tool
 
 FIELD_TYPES = {
 	"short text": "Data",
@@ -52,11 +47,12 @@ class NewField(BaseModel):
 	choices: list[str] = []
 
 
-@tool
-def setup_status(*, ctx: ToolContext) -> dict[str, Any]:
+@frappe.whitelist()
+@frappe.read_only()
+def setup_status() -> dict[str, Any]:
 	"""Everything the CRM setup checklist needs, in one read: currency, stages, email, forms, team,
 	lead assignment, data, which sample records are left (None once cleared), and whether deals can
-	get quotes (`quotes`). Needs no approval."""
+	get quotes (`quotes`)."""
 	from crm.demo.api import get_demo_state
 	from crm.demo.users import DEMO_USER_EMAILS
 
@@ -72,8 +68,6 @@ def setup_status(*, ctx: ToolContext) -> dict[str, Any]:
 		),
 		"lead_sources": _listed("CRM Lead Source", pluck="name"),
 		"lost_reasons": _listed("CRM Lost Reason", pluck="name"),
-		# without it, email is connected in Email settings, not in the chat
-		"password_box": _password_box() is not None,
 		"email_accounts": _listed(
 			"Email Account",
 			fields=[
@@ -151,40 +145,6 @@ def _sample_data_left() -> dict[str, Any]:
 	}
 
 
-def _password_box():
-	"""Flow's `reveal` for a password typed in the chat's password box, or None when this Flow
-	has no password box, so passwords never go through the chat."""
-	from importlib import import_module
-
-	for module in ("frappe.flow.lib.secrets", "flow.lib.secrets"):
-		try:
-			return import_module(module).reveal
-		except (ImportError, AttributeError):
-			continue
-	return None
-
-
-def setup_unfinished() -> bool:
-	"""Whether a CRM manager still has setup left: no email connected, or no teammate in or
-	invited. Not a tool; Flow asks it before suggesting "Set up my CRM"."""
-	from crm.demo.users import DEMO_USER_EMAILS
-
-	if not _is_crm_manager():
-		return False
-	if not frappe.db.exists("Email Account", {"enable_outgoing": 1}):
-		return True
-	team = frappe.get_all(
-		"User",
-		filters={
-			"user_type": "System User",
-			"enabled": 1,
-			"name": ["not in", ["Administrator", "Guest", frappe.session.user, *DEMO_USER_EMAILS]],
-		},
-		limit=1,
-	)
-	return not team and not frappe.db.exists("CRM Invitation", {"status": "Pending"})
-
-
 def _listed(doctype: str, **kwargs) -> list | None:
 	"""get_list, or None when the user can't read the doctype, so one part they can't see
 	doesn't stop the rest."""
@@ -195,49 +155,13 @@ def _is_crm_manager() -> bool:
 	return bool(set(frappe.get_roles()) & {"System Manager", "Sales Manager"})
 
 
-def _readable(doctype: str | None, name: str | None, field: str):
-	"""A record's field for an approval card, only if the user may read the record."""
-	if not (doctype and name and frappe.has_permission(doctype, "read", name)):
-		return None
-	return frappe.db.get_value(doctype, name, field)
-
-
-def _bullets(lines: list[str]) -> str:
-	return "\n".join(f"• {line}" for line in lines)
-
-
-def _form_prompt(args: dict) -> str:
-	verb = "Update" if args.get("form") else "Publish"
-	fields = args.get("fields") or []
-	if not fields and args.get("form"):
-		return f'Update "{args.get("title")}". Its fields and other settings stay as they are.'
-	if not fields:
-		return (
-			f'{verb} "{args.get("title")}" with the standard contact fields: name, email, phone and company.'
-		)
-	lines = []
-	for f in fields:
-		if f.get("layout") == "column break":
-			lines.append("— next column —")
-		elif f.get("layout") == "section break":
-			lines.append(f"— new section{': ' + f['label'] if f.get('label') else ''} —")
-		else:
-			lines.append(f"{f.get('label') or f.get('field')}{' (required)' if f.get('required') else ''}")
-	count = sum(1 for f in fields if not f.get("layout"))
-	return f'{verb} "{args.get("title")}" with these {count} fields:\n' + "\n".join(
-		line if line.startswith("—") else f"• {line}" for line in lines
-	)
-
-
-@tool(requires_confirmation=True, confirm_prompt=_form_prompt)
+@frappe.whitelist()
 def publish_web_form(
 	title: str,
 	fields: list[FormField] | None = None,
 	description: str | None = None,
 	success_message: str | None = None,
 	form: str | None = None,
-	*,
-	ctx: ToolContext,
 ) -> dict[str, Any]:
 	"""Create and publish a website form whose submissions become CRM leads, or update one: pass
 	its name as `form` to change it in place, keeping its link. `fields` are in the order visitors
@@ -303,19 +227,8 @@ def _check_doctype(doctype: str) -> None:
 		frappe.throw(_("{0} has no page in the CRM. Pick one of: {1}").format(doctype, ", ".join(doctypes)))
 
 
-def _fields_prompt(args: dict) -> str:
-	lines = []
-	for f in args.get("fields") or []:
-		kind = f.get("kind")
-		if kind == "dropdown":
-			kind = f"dropdown with {', '.join(f.get('choices') or [])}"
-		lines.append(f"{f.get('label')}: {kind}")
-	count = f"{len(lines)} new field{'s' if len(lines) != 1 else ''}"
-	return f"Add {count} to {_(args.get('doctype'))} records:\n{_bullets(lines)}"
-
-
-@tool(requires_confirmation=True, confirm_prompt=_fields_prompt)
-def add_fields(doctype: str, fields: list[NewField], *, ctx: ToolContext) -> dict[str, Any]:
+@frappe.whitelist()
+def add_fields(doctype: str, fields: list[NewField]) -> dict[str, Any]:
 	"""Add new fields to a CRM record type (`doctype`, such as CRM Lead, CRM Deal, Contact or CRM
 	Organization), for example answers a website form collects. Use this, not a Custom Field record.
 	A dropdown needs its choices. Returns each new field's fieldname. New fields show on no page
@@ -391,29 +304,13 @@ def _shown_in(doctype: str, fields: list[str]) -> list[str]:
 	return places
 
 
-def _show_prompt(args: dict) -> str:
-	doctype = args.get("doctype")
-	meta = frappe.get_meta(doctype)
-	labels = [meta.get_label(f) for f in args.get("fields") or []]
-	if args.get("after"):
-		shown = args.get("places") or _shown_in(doctype, args.get("fields") or [])
-		places = " and ".join(shown or ["places they show"])
-		after = meta.get_label(args["after"])
-		return f"On {_(doctype)} records, put these fields right after {after} in the {places}:\n{_bullets(labels)}"
-	places = " and ".join(args.get("places") or ["side panel"])
-	section = args.get("section") or "More details"
-	return f'Show these fields on {_(doctype)} records, in a "{section}" section of the {places}:\n{_bullets(labels)}'
-
-
-@tool(requires_confirmation=True, confirm_prompt=_show_prompt)
+@frappe.whitelist()
 def show_fields(
 	doctype: str,
 	fields: list[str],
 	places: list[Literal["side panel", "data tab", "new record form"]] | None = None,
 	section: str = "More details",
 	after: str | None = None,
-	*,
-	ctx: ToolContext,
 ) -> dict[str, list[str]]:
 	"""Show fields (fieldnames, such as ones add_fields returned) on a CRM record's page, or move
 	them: the side panel, the Data tab or the form for a new record. Without `after`, they go in the
@@ -497,93 +394,8 @@ def show_fields(
 	return {"shown_in": changed, "not_available": not_available, "after_missing": after_missing}
 
 
-@tool(
-	requires_confirmation=True,
-	confirm_prompt=lambda args: (
-		f"Connect {args.get('email')} ({args.get('provider')}) to the CRM, for sending and receiving, "
-		"and make it the default. The password stays on your site."
-	),
-)
-def connect_email(
-	provider: Literal["GMail", "Outlook", "Yahoo", "Yandex"], email: str, password: str, *, ctx: ToolContext
-) -> str:
-	"""Connect a mailbox for sending and receiving. `password` is the secret: reference the chat's
-	password box returned, never the password itself."""
-	from crm.api.settings import create_email_account
-
-	reveal = _password_box()
-	if not reveal:
-		frappe.throw(_("This chat can't take a password safely. Connect the email in Email settings."))
-
-	create_email_account(
-		{
-			"service": provider,
-			"email_id": email,
-			"email_account_name": email,
-			"password": reveal(password),
-			"enable_incoming": 1,
-			"enable_outgoing": 1,
-			"default_incoming": 1,
-			"default_outgoing": 1,
-		}
-	)
-	return f"Connected {email}."
-
-
-def _convert_prompt(args: dict) -> str:
-	name = _readable("CRM Lead", args.get("lead"), "lead_name") or args.get("lead")
-	value = f" worth {args['deal_value']}" if args.get("deal_value") else ""
-	return (
-		f"Convert {name} ({args.get('lead')}) to a deal{value}. Their contact and organization come "
-		"along, with the lead's notes, emails and tasks."
-	)
-
-
-@tool(requires_confirmation=True, confirm_prompt=_convert_prompt)
-def convert_lead(lead: str, deal_value: float | None = None, *, ctx: ToolContext) -> dict[str, str]:
-	"""Convert a lead to a deal the way the CRM's Convert to Deal button does: it creates or links the
-	contact and organization and carries the lead's notes, emails and tasks over. Returns the deal's
-	name and link. A lead already converted returns its existing deal."""
-	from crm.fcrm.doctype.crm_lead.crm_lead import convert_to_deal
-
-	deal = convert_to_deal(
-		lead=lead,
-		deal={"deal_value": deal_value} if deal_value else None,
-		if_converted="Return Existing",
-	)
-	return {"deal": deal, "link": f"/crm/deals/{deal}"}
-
-
-def _invite_prompt(args: dict) -> str:
-	return f"Invite these people to the CRM as {args.get('role')}s:\n{_bullets(args.get('emails') or [])}"
-
-
-@tool(requires_confirmation=True, confirm_prompt=_invite_prompt)
-def invite_team(
-	emails: list[str], role: Literal["Sales User", "Sales Manager", "System Manager"], *, ctx: ToolContext
-) -> dict[str, list[str]]:
-	"""Email an invitation to join the CRM to each address, all with the same role. Returns who was
-	invited, and who was skipped because they're already on the CRM or already invited."""
-	from crm.api import invite_by_email
-
-	result = invite_by_email(",".join(emails), role) or {}
-	# people already on the CRM or already invited are skipped, so say who actually got one
-	return {
-		"invited": result.get("to_invite", []),
-		"already_on_the_crm": result.get("existing_members", []),
-		"already_invited": result.get("existing_invites", []),
-	}
-
-
-def _assign_prompt(args: dict) -> str:
-	how = "taking turns" if args.get("rule") == "Round Robin" else "to whoever has the fewest"
-	return f"Hand out new leads to these people, {how}:\n{_bullets(args.get('users') or [])}"
-
-
-@tool(requires_confirmation=True, confirm_prompt=_assign_prompt)
-def assign_new_leads(
-	users: list[str], rule: Literal["Round Robin", "Load Balancing"] = "Round Robin", *, ctx: ToolContext
-) -> str:
+@frappe.whitelist()
+def assign_new_leads(users: list[str], rule: Literal["Round Robin", "Load Balancing"] = "Round Robin") -> str:
 	"""Assign each new lead automatically to one of `users` (their user emails)."""
 	from crm.api.form import _default_status
 
@@ -613,11 +425,8 @@ def assign_new_leads(
 	return f"Created the assignment rule {name}."
 
 
-@tool(
-	requires_confirmation=True,
-	confirm_prompt=lambda args: f"Set the CRM currency to {args.get('currency')}. It can't be changed later.",
-)
-def set_currency(currency: str, *, ctx: ToolContext) -> str:
+@frappe.whitelist()
+def set_currency(currency: str) -> str:
 	"""Set the currency deal values are in, such as INR or USD. It can only be set once."""
 	if not frappe.db.exists("Currency", currency):
 		frappe.throw(_("There's no currency {0}.").format(currency))
@@ -632,18 +441,6 @@ def set_currency(currency: str, *, ctx: ToolContext) -> str:
 	):
 		frappe.db.set_single_value("System Settings", "currency", currency)
 	return f"Currency set to {currency}."
-
-
-@tool(
-	requires_confirmation=True,
-	confirm_prompt=lambda args: "Remove the sample leads, deals, notes, tasks and demo users that came with the CRM. Anything you added stays.",
-)
-def clear_sample_data(*, ctx: ToolContext) -> str:
-	"""Remove the sample data a new CRM starts with."""
-	from crm.demo.api import clear_demo_data
-
-	clear_demo_data()
-	return "Sample data removed."
 
 
 # what an automation starts on: a change to the record, or a CRM event about it
@@ -711,93 +508,7 @@ class AutomationStep(BaseModel):
 	unit: Literal["minutes", "hours", "days"] = "days"
 
 
-def _automation_prompt(args: dict) -> str:
-	lines = [_plain_placeholders(line) for line in _describe_automation(args)]
-	return f'Add the automation "{args.get("name")}":\n' + _bullets(lines)
-
-
-def _plain_placeholders(text: str) -> str:
-	"""{{ doc.lead_name }} reads as [lead name] on the approval card."""
-	return re.sub(r"\{\{\s*doc\.(\w+)[^}]*\}\}", lambda m: f"[{m[1].replace('_', ' ')}]", text)
-
-
-def _describe_automation(args: dict) -> list[str]:
-	record = args.get("record") or "lead"
-	meta = frappe.get_meta(RECORDS.get(record, "CRM Lead"))
-
-	def label(fieldname):
-		field = meta.get_field(fieldname or "")
-		return (field.label if field else fieldname or "").lower()
-
-	starts = {
-		"created": f"a new {record} is added",
-		"changed": f"a {record}'s {label(args.get('field') or 'status')} changes"
-		+ (f" to {args['to_value']}" if args.get("to_value") else ""),
-		"replied": f"a {record} replies to an email",
-		"emailed": f"someone on the team emails a {record}",
-		"qualified": "a lead is qualified",
-		"converted": "a lead becomes a deal",
-		"won": "a deal is won",
-		"lost": "a deal is lost",
-		"task overdue": f"a task on a {record} goes overdue",
-		"date": f"it's {_days(args.get('days'))} {args.get('direction') or 'before'} a {record}'s "
-		f"{label(args.get('date_field'))}",
-	}
-	lines = [f"When {starts.get(args.get('when'), args.get('when'))}"]
-	if args.get("only_if"):
-		conditions = [c if isinstance(c, dict) else c.model_dump() for c in args["only_if"]]
-		lines.append(f"Only if its {_describe_conditions(conditions, label)}")
-	for s in args.get("steps") or []:
-		s = s if isinstance(s, dict) else s.model_dump()
-		conditions = [c if isinstance(c, dict) else c.model_dump() for c in s.get("only_if") or []]
-		step = _describe_step(s, label)
-		if conditions:
-			step = f"If its {_describe_conditions(conditions, label)}: {step[0].lower()}{step[1:]}"
-		lines.append(step)
-	return lines
-
-
-def _describe_conditions(conditions: list[dict], label) -> str:
-	return " and ".join(f"{label(c['field'])} {c.get('op') or 'is'} {c['value']}" for c in conditions)
-
-
-def _days(n) -> str:
-	return f"{n or 0} day" + ("" if n == 1 else "s")
-
-
-def _describe_people(people: list[str]) -> str:
-	names = {"me": "you", "assigned": "whoever it's assigned to", "created by": "whoever added it"}
-	return (
-		", ".join(names.get(p) or frappe.db.get_value("User", p, "full_name") or p for p in people)
-		or "nobody"
-	)
-
-
-def _describe_step(s: dict, label) -> str:
-	people = _describe_people(s.get("people") or [])
-	due = "today" if not s.get("amount") else f"in {_days(s.get('amount'))}"
-	return {
-		"notify": f'Notify {people} in the CRM: "{s.get("text")}"',
-		"email the team": f'Email {people}: "{s.get("text")}"',
-		"email them": f'Email them: "{s.get("email_template") or s.get("text")}"',
-		"create task": f'Add the task "{s.get("text")}", due {due}',
-		"assign": f"Assign it to {people}",
-		"set field": f"Set its {label(s.get('field'))} to {s.get('value')}",
-		"wait": f"Wait {s.get('amount')} {s.get('unit') or 'days'}",
-		"stop if they replied": "Stop here if they've replied",
-		"convert to deal": "Convert the lead to a deal",
-		"add to score": _describe_score(s),
-		"set temperature": f"Mark it {s.get('value')}",
-	}[s["do"]]
-
-
-def _describe_score(s: dict) -> str:
-	amount = s.get("amount") or 0
-	change = f"Add {amount} to its score" if amount >= 0 else f"Take {-amount} off its score"
-	return change + (f' ("{s["text"]}")' if s.get("text") else "")
-
-
-@tool(requires_confirmation=True, confirm_prompt=_automation_prompt)
+@frappe.whitelist()
 def add_automation(
 	name: str,
 	record: Literal["lead", "deal"],
@@ -820,8 +531,6 @@ def add_automation(
 	days: int = 0,
 	direction: Literal["before", "after"] = "before",
 	only_if: list[Condition] | None = None,
-	*,
-	ctx: ToolContext,
 ) -> dict[str, Any]:
 	"""Add a CRM workflow automation: when something happens to a lead or deal, run `steps` in
 	order. `when`: "created"; "changed" (`field`, default status, optionally changing `to_value`);
@@ -851,7 +560,7 @@ def add_automation(
 		"document_type": doctype,
 		"enabled": 1,
 		"stop_on_error": 1,
-		"actions": _automation_rows(steps, record, ctx.user),
+		"actions": _automation_rows(steps, record, frappe.session.user),
 	}
 	if when == "created":
 		flow["trigger_type"] = "Doc Created"
@@ -1052,14 +761,15 @@ OPEN_TASK = ["not in", ["Done", "Canceled"]]
 QUIET_DAYS = 14
 
 
-@tool
-def my_day(days: int = 1, *, ctx: ToolContext) -> dict[str, Any]:
+@frappe.whitelist()
+@frappe.read_only()
+def my_day(days: int = 1) -> dict[str, Any]:
 	"""What the signed-in user has on today: their tasks due today or overdue, leads and deals of
 	theirs waiting on a reply, their deals closing in the next 7 days or with no activity for 2 weeks
 	(no email, WhatsApp, call, note, comment, task or stage change), and leads they got since
 	yesterday. `days` widens the tasks to those due in that many days
-	from today, such as 7 for the week. Each item has a `link`. Needs no approval."""
-	user, today = ctx.user, frappe.utils.getdate()
+	from today, such as 7 for the week. Each item has a `link`."""
+	user, today = frappe.session.user, frappe.utils.getdate()
 	until = frappe.utils.add_days(today, min(max(days, 1), 31))
 	leads = frappe.get_list(
 		"CRM Lead",
@@ -1103,8 +813,9 @@ def my_day(days: int = 1, *, ctx: ToolContext) -> dict[str, Any]:
 	}
 
 
-@tool
-def sales_health(*, ctx: ToolContext) -> dict[str, Any]:
+@frappe.whitelist()
+@frappe.read_only()
+def sales_health() -> dict[str, Any]:
 	"""How sales are going, for everything the user can see: open deals by stage with their value,
 	this month against last month (new leads, leads turned into deals, deals won and lost),
 	deals closing in the next 30 days, deals with no activity for 2 weeks, overdue tasks that
@@ -1112,7 +823,7 @@ def sales_health(*, ctx: ToolContext) -> dict[str, Any]:
 	quarter's deals won and lost by owner with their win rate, how leads from each source turned
 	into deals in the last 90 days, and the forecast for this month and quarter: deals won so far
 	plus open deals due to close, at full value and weighted by their probability. Values are in
-	the CRM's currency. Everything counts only records the user can see. Needs no approval."""
+	the CRM's currency. Everything counts only records the user can see."""
 	today = frappe.utils.getdate()
 	this_month = frappe.utils.get_first_day(today)
 	last_month = frappe.utils.add_months(this_month, -1)
@@ -1145,7 +856,7 @@ def sales_health(*, ctx: ToolContext) -> dict[str, Any]:
 			)
 		],
 		"quiet_deals": len(_quiet(_open_deals({}, limit=0))),
-		"overdue_tasks": len(_overdue_tasks(today, ctx.user)),
+		"overdue_tasks": len(_overdue_tasks(today, frappe.session.user)),
 		"lost_reasons_last_90_days": _lost_by_reason(frappe.utils.add_days(today, -90), today, stages),
 		"this_quarter_by_owner": _by_owner(frappe.utils.get_quarter_start(today), today, stages),
 		"lead_sources_last_90_days": _lead_sources(frappe.utils.add_days(today, -90), today),
@@ -1568,14 +1279,7 @@ def _sender(user: str) -> str | None:
 	)
 
 
-def _email_prompt(args: dict) -> str:
-	record_email = _readable(args.get("doctype"), args.get("record"), "email")
-	to = ", ".join(args.get("to") or []) or record_email or "their email on the record"
-	cc = f"\nCopy to: {', '.join(args['cc'])}" if args.get("cc") else ""
-	return f"Send this email to {to}{cc}\nSubject: {args.get('subject')}\n\n{args.get('message')}"
-
-
-@tool(requires_confirmation=True, confirm_prompt=_email_prompt)
+@frappe.whitelist()
 def send_email(
 	doctype: WorkRecord,
 	record: str,
@@ -1583,8 +1287,6 @@ def send_email(
 	message: str,
 	to: list[str] | None = None,
 	cc: list[str] | None = None,
-	*,
-	ctx: ToolContext,
 ) -> dict[str, Any]:
 	"""Send an email from a lead or deal, as the CRM's email box does: from the user's email account,
 	shown on the record's timeline, where their reply also lands. `message` is plain text, with a
@@ -1613,8 +1315,8 @@ def send_email(
 		subject=subject,
 		content=_html(message),
 		send_email=1,
-		sender=_sender(ctx.user),
-		sender_full_name=frappe.utils.get_fullname(ctx.user),
+		sender=_sender(frappe.session.user),
+		sender_full_name=frappe.utils.get_fullname(frappe.session.user),
 	)
 	return {
 		"sent_to": recipients,
@@ -1624,155 +1326,13 @@ def send_email(
 	}
 
 
-def _note_prompt(args: dict) -> str:
-	title = args.get("title") or "Note"
-	return f'Add a note "{title}" to {_record_title(args.get("doctype"), args.get("record"))}:\n{args.get("text")}'
-
-
-@tool(requires_confirmation=True, confirm_prompt=_note_prompt)
-def add_note(
-	doctype: WorkRecord, record: str, text: str, title: str = "", *, ctx: ToolContext
-) -> dict[str, str]:
-	"""Add a note to a lead or deal, such as what was said on a call or in a meeting. For a call, title
-	it like "Call with Nina" and put what was said in `text`. `text` is plain text. Find the lead or
-	deal with find_records first. In your reply, name the lead or deal as a link to `link`, such as
-	[Kabir Mehta](/crm/leads/...), so they can open it to review; never write its id."""
-	_work_on(doctype, record)
-	note = frappe.get_doc(
-		{
-			"doctype": "FCRM Note",
-			"title": title or text.strip().splitlines()[0][:80],
-			"content": _html(text),
-			"reference_doctype": doctype,
-			"reference_docname": record,
-		}
-	).insert()
-	return {
-		"note": note.title,
-		"on": _record_title(doctype, record),
-		"link": _record_link(doctype, record, "notes"),
-	}
-
-
-def _when(due: str) -> str:
-	"""A due date as people say it, such as "Friday 23 October, 10:00 am"."""
-	at = frappe.utils.get_datetime(due)
-	day = f"{at:%A} {at.day} {at:%B}"
-	if not (at.hour or at.minute):
-		return day
-	return f"{day}, {at.hour % 12 or 12}:{at.minute:02d} {'am' if at.hour < 12 else 'pm'}"
-
-
-def _who(user: str | None) -> str:
-	return "you" if not user or user == frappe.session.user else frappe.utils.get_fullname(user)
-
-
-def _task_prompt(args: dict) -> str:
-	who = _who(args.get("assigned_to"))
-	due = f", due {_when(args['due'])}" if args.get("due") else ""
-	return f'Add a task for {who} on {_record_title(args.get("doctype"), args.get("record"))}{due}:\n• {args.get("title")}'
-
-
-@tool(requires_confirmation=True, confirm_prompt=_task_prompt)
-def add_task(
-	doctype: WorkRecord,
-	record: str,
-	title: str,
-	due: str | None = None,
-	assigned_to: str | None = None,
-	priority: Literal["Low", "Medium", "High"] = "Medium",
-	description: str = "",
-	*,
-	ctx: ToolContext,
-) -> dict[str, str]:
-	"""Add a task or reminder on a lead or deal, such as "Call Nina back". Whenever they say when, pass
-	`due` as a date and time like "2026-10-24 10:00", using 10:00 if they gave a day but no time. It
-	goes to the user unless `assigned_to` names another CRM user by email; they get notified.
-	Returns the task's id for update_task. Find the lead or deal with find_records first. In your
-	reply, name the lead or deal as a link to `link`, such as [Kabir Mehta](/crm/leads/...), so they
-	can open it to review; never write its id."""
-	_work_on(doctype, record)
-	user = assigned_to or ctx.user
-	if not frappe.db.get_value("User", {"name": user, "enabled": 1, "user_type": "System User"}):
-		frappe.throw(_("{0} isn't a user in this CRM.").format(user))
-	task = frappe.get_doc(
-		{
-			"doctype": "CRM Task",
-			"title": title,
-			"description": _html(description) if description else "",
-			"assigned_to": user,
-			"due_date": frappe.utils.get_datetime(due) if due else None,
-			"priority": priority,
-			"status": "Todo",
-			"reference_doctype": doctype,
-			"reference_docname": record,
-		}
-	).insert()
-	return {
-		"task": task.name,
-		"title": title,
-		"due": _when(str(task.due_date)) if task.due_date else None,
-		"on": _record_title(doctype, record),
-		"link": _record_link(doctype, record, "tasks"),
-	}
-
-
-def _update_task_prompt(args: dict) -> str:
-	task = {"title": _readable("CRM Task", args.get("task"), "title") or ""}
-	changes = []
-	if args.get("title"):
-		changes.append(f"call it \"{args['title']}\"")
-	if args.get("due"):
-		changes.append(f"move it to {_when(args['due'])}")
-	if args.get("assigned_to"):
-		changes.append(f"give it to {_who(args['assigned_to'])}")
-	if args.get("status"):
-		changes.append("mark it done" if args["status"] == "Done" else f"set it to {args['status']}")
-	return f'For the task "{task.get("title", "")}": {", ".join(changes) or "no change"}.'
-
-
-@tool(requires_confirmation=True, confirm_prompt=_update_task_prompt)
-def update_task(
-	task: str,
-	due: str | None = None,
-	status: Literal["Backlog", "Todo", "In Progress", "Done", "Canceled"] | None = None,
-	assigned_to: str | None = None,
-	title: str | None = None,
-	*,
-	ctx: ToolContext,
-) -> dict[str, Any]:
-	"""Change a task: move its `due` date and time (like "2026-10-24 10:00"), mark it Done, give
-	it to another CRM user by email, or rename it. `task` is the id add_task, my_day or
-	read_records("CRM Task", ...) gave. Leave out what stays the same."""
-	doc = frappe.get_doc("CRM Task", task)
-	doc.check_permission("write")
-	if assigned_to and not frappe.db.get_value(
-		"User", {"name": assigned_to, "enabled": 1, "user_type": "System User"}
-	):
-		frappe.throw(_("{0} isn't a user in this CRM.").format(assigned_to))
-	if due:
-		doc.due_date = frappe.utils.get_datetime(due)
-	for field, value in (("status", status), ("assigned_to", assigned_to), ("title", title)):
-		if value:
-			doc.set(field, value)
-	doc.save()
-	return {
-		"task": doc.name,
-		"title": doc.title,
-		"due": _when(str(doc.due_date)) if doc.due_date else None,
-		"status": doc.status,
-		"link": _record_link(doc.reference_doctype, doc.reference_docname, "tasks")
-		if doc.reference_docname
-		else "/crm/tasks",
-	}
-
-
-@tool
-def find_records(text: str, *, ctx: ToolContext) -> list[dict[str, Any]]:
+@frappe.whitelist()
+@frappe.read_only()
+def find_records(text: str) -> list[dict[str, Any]]:
 	"""Find the leads and deals the user can see whose person, company or email matches `text`, such as
 	"Nina", "Corvid" or "nina@corvid.ai", one name at a time. Use it, never code, to work out which
 	lead or deal they mean before an email, note or task. Leads already turned into deals are left
-	out. Needs no approval. Name each match to the user as a link to its `link`, never their ids."""
+	out. Name each match to the user as a link to its `link`, never their ids."""
 	like = f"%{text.strip()}%"
 	found = []
 	for doctype, extra in (("CRM Lead", {"converted": 0}), ("CRM Deal", {})):
