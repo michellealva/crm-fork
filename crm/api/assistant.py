@@ -155,7 +155,7 @@ def _is_crm_manager() -> bool:
 	return bool(set(frappe.get_roles()) & {"System Manager", "Sales Manager"})
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def publish_web_form(
 	title: str,
 	fields: list[FormField] | None = None,
@@ -227,12 +227,12 @@ def _check_doctype(doctype: str) -> None:
 		frappe.throw(_("{0} has no page in the CRM. Pick one of: {1}").format(doctype, ", ".join(doctypes)))
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def add_fields(doctype: str, fields: list[NewField]) -> dict[str, Any]:
 	"""Add new fields to a CRM record type (`doctype`, such as CRM Lead, CRM Deal, Contact or CRM
 	Organization), for example answers a website form collects. Use this, not a Custom Field record.
 	A dropdown needs its choices. Returns each new field's fieldname. New fields show on no page
-	until show_fields puts them there, so ask the user where to show them."""
+	until show_fields puts them there."""
 	_check_doctype(doctype)
 	meta = frappe.get_meta(doctype)
 	added = {}
@@ -290,21 +290,7 @@ def _new_section(label: str, fields: list[str]) -> dict[str, Any]:
 	}
 
 
-def _shown_in(doctype: str, fields: list[str]) -> list[str]:
-	"""The places on a record's page where any of `fields` shows."""
-	places = []
-	for place, kind in LAYOUT_PLACES.items():
-		layout = json.loads(
-			frappe.db.get_value("CRM Fields Layout", {"dt": doctype, "type": kind}, "layout") or "[]"
-		)
-		if any(
-			set(fields) & _section_fields(sec) for tab in _tabs(layout) for sec in tab.get("sections", [])
-		):
-			places.append(place)
-	return places
-
-
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def show_fields(
 	doctype: str,
 	fields: list[str],
@@ -394,7 +380,7 @@ def show_fields(
 	return {"shown_in": changed, "not_available": not_available, "after_missing": after_missing}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def assign_new_leads(users: list[str], rule: Literal["Round Robin", "Load Balancing"] = "Round Robin") -> str:
 	"""Assign each new lead automatically to one of `users` (their user emails)."""
 	from crm.api.form import _default_status
@@ -425,7 +411,7 @@ def assign_new_leads(users: list[str], rule: Literal["Round Robin", "Load Balanc
 	return f"Created the assignment rule {name}."
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def set_currency(currency: str) -> str:
 	"""Set the currency deal values are in, such as INR or USD. It can only be set once."""
 	if not frappe.db.exists("Currency", currency):
@@ -508,7 +494,7 @@ class AutomationStep(BaseModel):
 	unit: Literal["minutes", "hours", "days"] = "days"
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def add_automation(
 	name: str,
 	record: Literal["lead", "deal"],
@@ -1279,7 +1265,7 @@ def _sender(user: str) -> str | None:
 	)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def send_email(
 	doctype: WorkRecord,
 	record: str,
@@ -1290,10 +1276,8 @@ def send_email(
 ) -> dict[str, Any]:
 	"""Send an email from a lead or deal, as the CRM's email box does: from the user's email account,
 	shown on the record's timeline, where their reply also lands. `message` is plain text, with a
-	blank line between paragraphs. `to` defaults to the record's email. Find the lead or deal with
-	find_records first. Show the whole email first, with the lead or deal as that link, and send
-	only after their yes. In your reply, name the lead or deal as a link to `link`, such as [Kabir
-	Mehta](/crm/leads/...), so they can open it to review; never write its id."""
+	blank line between paragraphs. `to` defaults to the record's email. Refuses addresses that
+	unsubscribed. Returns who it went to and a `link` to the record's Emails tab."""
 	from frappe.core.doctype.communication.email import make
 
 	from crm.api import get_unsubscribed_emails
@@ -1330,9 +1314,8 @@ def send_email(
 @frappe.read_only()
 def find_records(text: str) -> list[dict[str, Any]]:
 	"""Find the leads and deals the user can see whose person, company or email matches `text`, such as
-	"Nina", "Corvid" or "nina@corvid.ai", one name at a time. Use it, never code, to work out which
-	lead or deal they mean before an email, note or task. Leads already turned into deals are left
-	out. Name each match to the user as a link to its `link`, never their ids."""
+	"Nina", "Corvid" or "nina@corvid.ai", one name at a time. Leads already turned into deals are left
+	out. Each match has a `link` to its page."""
 	like = f"%{text.strip()}%"
 	found = []
 	for doctype, extra in (("CRM Lead", {"converted": 0}), ("CRM Deal", {})):

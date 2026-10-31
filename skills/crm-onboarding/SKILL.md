@@ -240,7 +240,7 @@ They can come back to this chat any time to pick up where they left off.
 - Show what you're about to create before you create it, and group related records into one call so they approve once.
 - For setup, use the CRM's functions in "Calling the CRM", through `execute` with one `frappe.call` line each. Write other code in `execute` only when none of them, and no other tool, fits.
 - Never create Flow agents, Flow triggers or other Flow records, and never look at Flow's own setup. Anything that should happen on its own is a CRM automation.
-- To look something up, use `read_records` or `describe`. They need no approval, so never run code just to read or count things; `setup_status` is the one read that goes through `execute`. Never read or search the app's code or files to work out how something works; this skill and the CRM's functions cover what you need.
+- To look something up, use `read_records` or `describe`. They need no approval, so never run code just to read or count things. Call `setup_status` once at the start and again only after they say something is done. Never read or search the app's code or files to work out how something works; this skill and the CRM's functions cover what you need.
 - Every `execute` call's `description` is what the user approves, so write it as what will happen, in their words, such as "Invite Asha and Ravi as Sales Users". Never name code, methods or DocTypes in it.
 - Use the exact names you read back from the site. Status, source and reason names are case sensitive.
 - Never ask for a password, API key, access token or app password in the chat. Passwords go in the CRM's settings pages. If they type one into the chat anyway, don't repeat it, and suggest they change it.
