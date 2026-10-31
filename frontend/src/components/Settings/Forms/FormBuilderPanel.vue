@@ -690,8 +690,7 @@ import LucideSettings from '~icons/lucide/settings'
 import { globalStore } from '@/stores/global'
 import { useTelemetry } from '@framework/ui/telemetry'
 import { copyToClipboard } from '@/utils'
-import { unsavedSettings } from '@/composables/settings'
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 
 const { $dialog } = globalStore()
 const { capture } = useTelemetry()
@@ -710,8 +709,6 @@ const docLabel = (dt) => targetOptions.find((o) => o.value === dt)?.label || dt
 const loaded = ref(false)
 const saving = ref(false)
 const dirty = ref(false)
-watch(dirty, (value) => (unsavedSettings.value = value))
-onUnmounted(() => (unsavedSettings.value = false))
 
 const savedPublished = ref(false)
 const mode = ref('edit') // edit | preview

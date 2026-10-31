@@ -82,10 +82,9 @@
 </template>
 
 <script setup>
-import { computed, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { call, toast } from 'frappe-ui'
 import EmailProviderIcon from './EmailProviderIcon.vue'
-import { unsavedSettings } from '@/composables/settings'
 import {
   emailIcon,
   services,
@@ -190,15 +189,6 @@ const isDirty = computed(() => {
     state.frappe_mail_site !== props.accountData.frappe_mail_site
   )
 })
-
-// unsaved edits keep the assistant from reopening Settings over them
-watch(
-  () =>
-    isDirty.value ||
-    state.email_account_name !== props.accountData.email_account_name,
-  (value) => (unsavedSettings.value = value),
-)
-onUnmounted(() => (unsavedSettings.value = false))
 
 async function callRenameDoc() {
   const d = await call('frappe.client.rename_doc', {

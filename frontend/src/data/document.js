@@ -50,12 +50,6 @@ export function unmarkDocumentAsDeleted(doctype, docname) {
   intentionallyDeletedDocs.delete(`${doctype}:${docname}`)
 }
 
-// reload an open record's data after something else changed it, such as the assistant
-export function reloadDocument(doctype, docname) {
-  const doc = documentsCache[doctype]?.[docname]
-  if (doc?.doc && !doc.loading) doc.reload()
-}
-
 export function useDocument(doctype, docname, resourceOverrides = {}) {
   if (typeof docname === 'number') docname = String(docname)
   const { setupScript, scripts } = getScript(doctype)

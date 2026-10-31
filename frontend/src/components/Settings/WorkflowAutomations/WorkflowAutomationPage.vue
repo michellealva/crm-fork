@@ -173,7 +173,6 @@ import { usersStore } from '@/stores/users'
 import {
   disableSettingModalOutsideClick,
   settingsRecord,
-  unsavedSettings,
 } from '@/composables/settings'
 import {
   List,
@@ -217,11 +216,7 @@ const listColumns = [
 
 // While the builder is up, a click outside must not take the settings dialog with it.
 watch(showBuilder, (open) => (disableSettingModalOutsideClick.value = open))
-watch(dirty, (value) => (unsavedSettings.value = value))
-onUnmounted(() => {
-  disableSettingModalOutsideClick.value = false
-  unsavedSettings.value = false
-})
+onUnmounted(() => (disableSettingModalOutsideClick.value = false))
 
 const automations = createListResource({
   doctype: 'Automation Flow',
