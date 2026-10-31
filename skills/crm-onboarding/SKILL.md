@@ -191,7 +191,7 @@ Use `invite_by_email`, one call per role, with `emails` as one comma-separated s
 
 ### Assign new leads automatically
 
-For a team, offer a rule that hands new leads out: taking turns (`rule="Round Robin"`) or to whoever has the fewest (`rule="Load Balancing"`). Then ask who should get leads, from the users on the site. Invited people can only be added once they've accepted. Then create it with `assign_new_leads`, `users` as their user emails.
+For a team, offer a rule that hands new leads out: taking turns (`rule="Round Robin"`) or to whoever has the fewest (`rule="Load Balancing"`). Then ask who should get leads, from the users on the site. Invited people can only be added once they've accepted. Then create it with `assign_new_leads`, `users` as a list of their user emails, such as `users=["asha@example.com", "ravi@example.com"]`. Only a System Manager can add assignment rules; if it fails with a permission error, tell them to ask their CRM admin.
 
 They can change it in [Assignment rules](/crm/leads?settings=Assignment%20Rules), or set who reports to whom in [Sales hierarchy](/crm/leads?settings=Sales%20Hierarchy).
 
