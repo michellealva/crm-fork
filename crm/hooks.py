@@ -284,6 +284,14 @@ doc_events = {
 	"CRM Lead": {
 		"on_update": ["crm.automation.events.on_lead_update"],
 	},
+	"FCRM Note": {
+		"on_update": ["crm.api.activities.notify_activity_change"],
+		"on_trash": ["crm.api.activities.notify_activity_change"],
+	},
+	"CRM Task": {
+		"on_update": ["crm.api.activities.notify_activity_change"],
+		"on_trash": ["crm.api.activities.notify_activity_change"],
+	},
 	"Sales Order": {
 		"before_validate": [
 			"crm.fcrm.doctype.erpnext_crm_settings.erpnext_crm_settings.create_customer_on_sales_order"

@@ -727,12 +727,14 @@ watch(
 
 onBeforeUnmount(() => {
   $socket.off('docinfo_update', handleDocinfoUpdate)
+  $socket.off('crm_activity_update', handleActivityUpdate)
   $socket.emit('doc_unsubscribe', props.doctype, props.docname)
 })
 
 onMounted(() => {
   $socket.emit('doc_subscribe', props.doctype, props.docname)
   $socket.on('docinfo_update', handleDocinfoUpdate)
+  $socket.on('crm_activity_update', handleActivityUpdate)
 
   nextTick(() => scrollToHash(route.hash))
 })
@@ -762,6 +764,12 @@ function handleDocinfoUpdate({ doc, key }) {
 
   all_activities.reload()
   _document.reload()
+}
+
+// a note or task changed elsewhere, such as by the site's assistant
+function handleActivityUpdate({ doctype, name }) {
+  if (doctype === props.doctype && name === props.docname)
+    all_activities.reload()
 }
 
 function onTemplateSent() {
