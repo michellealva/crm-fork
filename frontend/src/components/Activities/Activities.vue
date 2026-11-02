@@ -606,7 +606,6 @@ import { usersStore } from '@/stores/users'
 import { useTimelinePreferences } from '@/composables/useTimelinePreferences'
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { useDocument } from '@/data/document'
-import { assistantChanges } from '@/composables/assistant'
 import { MessageInput, MessageList, useMessages } from '@whatsapp/ui'
 import { useTelemetry } from '@framework/ui/telemetry'
 import { Avatar, Button, createResource, toast } from 'frappe-ui'
@@ -726,26 +725,18 @@ watch(
   () => nextTick(() => scroll()),
 )
 
-// the assistant added an email here, or changed a note or task: show it without a manual reload
-watch(assistantChanges, (changed) => {
-  if (!changed) return
-  const here = changed.records.some(
-    (r) => r.doctype === props.doctype && r.name === props.docname,
-  )
-  const touched = ['*', 'CRM Task', 'FCRM Note'].some((d) =>
-    changed.doctypes.includes(d),
-  )
-  if (here || touched) all_activities.reload()
-})
-
 onBeforeUnmount(() => {
   $socket.off('docinfo_update', handleDocinfoUpdate)
+  $socket.off('crm_activity_update', handleActivityUpdate)
+  $socket.off('doc_update', handleDocUpdate)
   $socket.emit('doc_unsubscribe', props.doctype, props.docname)
 })
 
 onMounted(() => {
   $socket.emit('doc_subscribe', props.doctype, props.docname)
   $socket.on('docinfo_update', handleDocinfoUpdate)
+  $socket.on('crm_activity_update', handleActivityUpdate)
+  $socket.on('doc_update', handleDocUpdate)
 
   nextTick(() => scrollToHash(route.hash))
 })
@@ -775,6 +766,18 @@ function handleDocinfoUpdate({ doc, key }) {
 
   all_activities.reload()
   _document.reload()
+}
+
+// a note or task changed elsewhere, such as by the site's assistant
+function handleActivityUpdate({ doctype, name }) {
+  if (doctype === props.doctype && name === props.docname)
+    all_activities.reload()
+}
+
+// the record itself changed elsewhere, so its timeline has a new version
+function handleDocUpdate({ doctype, name }) {
+  if (doctype === props.doctype && name === props.docname)
+    all_activities.reload()
 }
 
 function onTemplateSent() {

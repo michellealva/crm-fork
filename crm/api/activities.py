@@ -11,6 +11,19 @@ from crm.fcrm.doctype.crm_call_log.crm_call_log import parse_call_log
 from crm.fcrm.doctype.crm_fields_layout.crm_fields_layout import get_permlevel_access
 
 
+def notify_activity_change(doc, method=None):
+	"""Push a realtime event so an open lead's or deal's timeline shows a note or task changed
+	elsewhere, such as by the site's assistant or another user."""
+	if doc.reference_doctype and doc.reference_docname:
+		frappe.publish_realtime(
+			"crm_activity_update",
+			{"doctype": doc.reference_doctype, "name": doc.reference_docname},
+			doctype=doc.reference_doctype,
+			docname=doc.reference_docname,
+			after_commit=True,
+		)
+
+
 @frappe.whitelist()
 def get_activities(name: str):
 	"""Return the timeline of a Lead or Deal: field changes, emails, comments, calls, notes, tasks and attachments."""

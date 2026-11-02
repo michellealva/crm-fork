@@ -124,8 +124,7 @@
 <script setup>
 import RichTextField from '@/components/RichTextField.vue'
 import { FormControl, Switch, toast, createResource } from 'frappe-ui'
-import { unsavedSettings } from '@/composables/settings'
-import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, onMounted, ref } from 'vue'
 
 const props = defineProps({
   templateData: { type: Object, required: true },
@@ -215,10 +214,6 @@ const dirty = computed(() => {
     Boolean(template.value.enabled) !== Boolean(props.templateData.enabled)
   )
 })
-
-// unsaved edits keep the assistant from reopening Settings over them
-watch(dirty, (value) => (unsavedSettings.value = value))
-onUnmounted(() => (unsavedSettings.value = false))
 
 const renameDoc = createResource({
   url: 'frappe.client.rename_doc',

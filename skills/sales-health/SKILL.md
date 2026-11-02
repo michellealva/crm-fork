@@ -1,12 +1,5 @@
 ---
 name: sales-health
-starter: How are my sales doing?
-prompts:
-  - "How did this month compare to last?"
-  - "Which deals are closing soon?"
-  - "Why are we losing deals?"
-  - "What's the forecast this quarter?"
-  - "Who's closing the most this quarter?"
 description: Give a short, plain-English update on how sales are going in the CRM, such as the open pipeline by stage, this month against last month, deals won and lost, and deals that have gone quiet. Use when someone asks about their sales health, pipeline, numbers, performance or how the month is going.
 ---
 
@@ -14,14 +7,14 @@ description: Give a short, plain-English update on how sales are going in the CR
 
 The person asking may be a salesperson or a manager, and isn't technical. Answer in simple, plain English, like a colleague summing up the month. Never mention record IDs, field names, tools, code or technical terms, and don't use tables or code blocks.
 
-1. Call `sales_health`. It needs no approval and only reads, so never write code for this.
+1. Call `run_action` with `action` `crm.api.assistant.sales_health`, `doctype` empty and `names` `[]`. It only reads, so it needs no approval; never write code for this. Call it once per conversation unless they ask for fresh numbers.
 2. Open with one sentence on how things are going, comparing this month with last month, such as "A busier month than last: 36 deals won so far, against 65 in all of last month."
 3. Then a few short lines:
    - **Pipeline**: how many open deals and their total value, and the stage with the most in it. Skip stages with nothing in them.
    - **This month**: new leads, leads that became deals, deals won (with their value) and lost.
    - **Needs attention**: deals gone quiet (no email, call, note or other activity in 2 weeks) and overdue tasks, if any.
 4. Write amounts in the CRM's currency with thousands separators, such as ₹18,42,600 or $1,842,600. If `currency` is empty, leave the symbol out.
-5. End with one or two options they can click, such as "What's on my plate today?" or "Show me the quiet deals". Link to [Deals](/crm/deals) or the [Deals board](/crm/deals/view/kanban) when they want to look for themselves.
+5. End with one or two next questions they could ask, such as "What's on my plate today?" or "Show me the quiet deals". Link to [Deals](/crm/deals) or the [Deals board](/crm/deals/view/kanban) when they want to look for themselves.
 
 When they ask about one thing, answer just that, still from `sales_health`:
 
