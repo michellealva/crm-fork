@@ -430,6 +430,48 @@ def set_currency(currency: str) -> str:
 	return f"Currency set to {currency}."
 
 
+@frappe.whitelist(methods=["POST"])
+def connect_email(provider: Literal["GMail", "Outlook", "Yahoo", "Yandex"], email: str) -> dict[str, Any]:
+	"""Connect a mailbox for sending and receiving, as Email settings does, in two calls. The first makes
+	the account, switched off, so request_secret can save its password into the account's `password`
+	field; the second checks that password with the provider and switches the account on."""
+	from crm.api.settings import email_service_config
+
+	if provider not in ("GMail", "Outlook", "Yahoo", "Yandex"):
+		frappe.throw(_("Connect {0} in Email settings.").format(provider))
+	name = frappe.db.get_value("Email Account", {"email_id": email})
+	if not name:
+		doc = frappe.get_doc(
+			{
+				"doctype": "Email Account",
+				"email_id": email,
+				"email_account_name": email,
+				"service": provider,
+				"email_sync_option": "ALL",
+				"initial_sync_count": 100,
+				"create_contact": 1,
+				"track_email_status": 1,
+				"use_tls": 1,
+				"use_imap": 1,
+				"smtp_port": 587,
+				**email_service_config[provider],
+			}
+		)
+		doc.append("imap_folder", {"append_to": "CRM Lead", "folder_name": "INBOX"})
+		doc.insert()
+		return {"email_account": doc.name, "connected": False, "needs_password": True}
+
+	doc = frappe.get_doc("Email Account", name)
+	if doc.enable_incoming and doc.enable_outgoing:
+		return {"email_account": doc.name, "connected": True}
+	if not doc.password:
+		return {"email_account": doc.name, "connected": False, "needs_password": True}
+	# saving with them on makes Email Account sign in to the provider, so a wrong password fails here
+	doc.update({"enable_incoming": 1, "enable_outgoing": 1, "default_incoming": 1, "default_outgoing": 1})
+	doc.save()
+	return {"email_account": doc.name, "connected": True}
+
+
 # what an automation starts on: a change to the record, or a CRM event about it
 RECORD_EVENTS = {
 	"replied": "crm.prospect_message_received",

@@ -46,6 +46,7 @@ The CRM's setup actions are functions you call with `run_action`, one call each:
 | Invite people | `crm.api.invite_by_email` |
 | Hand out new leads | `crm.api.assistant.assign_new_leads` |
 | Set the currency | `crm.api.assistant.set_currency` |
+| Connect a mailbox | `crm.api.assistant.connect_email` |
 | Clear the sample data | `crm.demo.api.clear_demo_data` |
 | Add an automation | `crm.api.assistant.add_automation` |
 | Convert a lead to a deal | `crm.fcrm.doctype.crm_lead.crm_lead.convert_to_deal` |
@@ -99,7 +100,15 @@ When a step is done or skipped, say so in one line, give its link, and ask "What
 
 ### Connect your email
 
-Email is connected in [Email settings](/crm/leads?settings=Accounts), never in this chat, because the chat can't take a password safely. Ask which email they use for sales: Gmail, Outlook, Yahoo, Yandex or something else. Gmail, Outlook and Yahoo need an app password, not their normal one, and it only works once two-step sign-in is on. Give the link to make one: [Gmail](https://myaccount.google.com/apppasswords), [Outlook](https://support.microsoft.com/en-us/account-billing/how-to-get-and-use-app-passwords-5896ed9b-4263-e681-128a-a6f2979a7944), [Yahoo](https://login.yahoo.com/account/security/app-passwords), [Yandex](https://yandex.com/support/id/authorization/app-passwords.html). Email settings also covers Frappe Mail and custom servers. Ask them to say "done" when it's connected, then call `setup_status` to check.
+Set it up for them, one question at a time:
+
+1. **Which email do you use for sales?** Options: Gmail, Outlook, Yahoo, Yandex, then "Something else" after the --- line. For something else, send them to [Email settings](/crm/leads?settings=Accounts), which also covers Frappe Mail and custom servers, ask them to say "done", then call `setup_status` to check.
+2. **What's the email address?** An open question, so no options.
+3. Call `connect_email` with `provider` (GMail, Outlook, Yahoo or Yandex) and `email`. It makes the account, switched off, and returns its name in `email_account`.
+4. Gmail, Outlook and Yahoo need an app password, not their normal one, and it only works once two-step sign-in is on. Give the link to make one: [Gmail](https://myaccount.google.com/apppasswords), [Outlook](https://support.microsoft.com/en-us/account-billing/how-to-get-and-use-app-passwords-5896ed9b-4263-e681-128a-a6f2979a7944), [Yahoo](https://login.yahoo.com/account/security/app-passwords), [Yandex](https://yandex.com/support/id/authorization/app-passwords.html). Then ask for it with `request_secret` on `Email Account`, that `email_account`, field `password`, with a `reason` such as "The app password for you@gmail.com". They type it into a password box; it never reaches you.
+5. When it's saved, call `connect_email` again with the same `provider` and `email`. It checks the password with the provider and switches the account on. If it fails, say the provider didn't accept the password, and ask for it again with `request_secret`, then call `connect_email` once more.
+
+Only a System Manager can connect email. If it fails with a permission error, tell them to ask their CRM admin.
 
 Once it's connected, offer two things you can do from the chat:
 
@@ -243,7 +252,7 @@ They can come back to this chat any time to pick up where they left off.
 - To look something up, use `read_records` or `describe`. They need no approval, so never run code just to read or count things. Call `setup_status` once at the start and again only after they say something is done. Never read or search the app's code or files to work out how something works; this skill and the CRM's functions cover what you need.
 - When you do use `execute`, its `description` is what the user approves, so write it as what will happen, in their words, such as "Import 40 deals". Never name code, methods or DocTypes in it.
 - Use the exact names you read back from the site. Status, source and reason names are case sensitive.
-- Never ask for a password, API key, access token or app password in the chat. Passwords go in the CRM's settings pages. If they type one into the chat anyway, don't repeat it, and suggest they change it.
+- Never ask for a password, API key, access token or app password in a message. Ask for it with `request_secret`, as "Connect your email" says, or send them to the CRM's settings pages. If they type one into the chat anyway, don't repeat it, and suggest they change it.
 - If they want to change an earlier answer, go back to that question. Undo anything already created only if they ask, and say what you're undoing.
 - If something fails, say what failed in plain words and what you'll try instead. Don't retry the same call unchanged.
 - To convert a lead to a deal, call `convert_to_deal` with `lead` and `if_converted="Return Existing"`, so a retry returns the same deal. If a CRM action like this fails, never rebuild its result by creating the records yourself: the CRM does more than create them, such as carrying notes and emails over. Say it didn't work instead.

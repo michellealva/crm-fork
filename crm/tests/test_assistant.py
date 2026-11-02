@@ -12,6 +12,7 @@ WRITES = (
 	"show_fields",
 	"assign_new_leads",
 	"set_currency",
+	"connect_email",
 	"add_automation",
 	"send_email",
 )
@@ -25,6 +26,13 @@ class TestAssistantFunctions(IntegrationTestCase):
 	def test_skills_can_call_every_function(self):
 		for name in READS + WRITES:
 			self.assertIn(getattr(assistant, name), frappe.whitelisted, name)
+
+	def test_only_reads_run_without_a_card(self):
+		# Flow's run_action skips the approval card for a whitelisted function marked read_only
+		for name in READS:
+			self.assertTrue(getattr(getattr(assistant, name), "read_only", False), name)
+		for name in WRITES:
+			self.assertFalse(getattr(getattr(assistant, name), "read_only", False), name)
 
 	def test_reads_go_through_frappe_call(self):
 		lead = frappe.get_doc(
@@ -54,3 +62,18 @@ class TestAssistantFunctions(IntegrationTestCase):
 			docname=lead.name,
 			after_commit=True,
 		)
+
+	def test_connect_email_waits_for_the_password(self):
+		email = "sales.assistant.test@gmail.com"
+		first = assistant.connect_email("GMail", email)
+		self.assertEqual(first, {"email_account": email, "connected": False, "needs_password": True})
+		account = frappe.get_doc("Email Account", email)
+		self.assertFalse(account.enable_incoming or account.enable_outgoing)
+		self.assertTrue(assistant.connect_email("GMail", email)["needs_password"])
+
+		# what request_secret's password box does
+		account.password = "app-password"
+		account.save()
+		self.assertEqual(assistant.connect_email("GMail", email), {"email_account": email, "connected": True})
+		account.reload()
+		self.assertTrue(account.enable_incoming and account.enable_outgoing and account.default_outgoing)
