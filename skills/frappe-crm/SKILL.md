@@ -20,7 +20,7 @@ CRM tracks sales in two documents. A `CRM Lead` is a prospect that is not yet qu
 
 On the site's assistant, call a whitelisted method with `run_action`: `action` is its dotted path, `args` its arguments, `doctype` empty and `names` `[]`, such as `run_action("", [], "crm.fcrm.doctype.crm_lead.crm_lead.convert_to_deal", {"lead": "CRM-LEAD-2026-00001", "if_converted": "Return Existing"})`. A method that only reads runs without approval; any other shows the user a card. Create and update records with `create` and `update`.
 
-- Convert a lead: call `crm.fcrm.doctype.crm_lead.crm_lead.convert_to_deal` with `lead`. It makes the deal, contact and organization and marks the lead converted. It returns the deal name. Pass `if_converted: "Return Existing"` to get the existing deal on a retry instead of a second deal.
+- Convert a lead: call `crm.fcrm.doctype.crm_lead.crm_lead.convert_to_deal` with `lead`. It makes the deal, contact and organization and marks the lead converted. It returns the deal name. Pass `if_converted: "Return Existing"` to get the existing deal on a retry instead of a second deal. To set the deal's fields at once, such as its value, pass them in `deal`, such as `{"deal_value": 120000}`, so the user approves one card.
 - Read a timeline: call `crm.api.activities.get_activities` with `name` (a lead or deal). It returns field changes, emails, comments, calls, notes, tasks and attachments.
 - Change deal contacts: call `add_contact`, `remove_contact` or `set_primary_contact` in `crm.fcrm.doctype.crm_deal.crm_deal`, each with `deal` and `contact`.
 - Add a comment: call `crm.api.comment.add_comment` with `reference_doctype`, `reference_name` and `content` (HTML).
