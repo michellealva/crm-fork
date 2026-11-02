@@ -728,6 +728,7 @@ watch(
 onBeforeUnmount(() => {
   $socket.off('docinfo_update', handleDocinfoUpdate)
   $socket.off('crm_activity_update', handleActivityUpdate)
+  $socket.off('doc_update', handleDocUpdate)
   $socket.emit('doc_unsubscribe', props.doctype, props.docname)
 })
 
@@ -735,6 +736,7 @@ onMounted(() => {
   $socket.emit('doc_subscribe', props.doctype, props.docname)
   $socket.on('docinfo_update', handleDocinfoUpdate)
   $socket.on('crm_activity_update', handleActivityUpdate)
+  $socket.on('doc_update', handleDocUpdate)
 
   nextTick(() => scrollToHash(route.hash))
 })
@@ -768,6 +770,12 @@ function handleDocinfoUpdate({ doc, key }) {
 
 // a note or task changed elsewhere, such as by the site's assistant
 function handleActivityUpdate({ doctype, name }) {
+  if (doctype === props.doctype && name === props.docname)
+    all_activities.reload()
+}
+
+// the record itself changed elsewhere, so its timeline has a new version
+function handleDocUpdate({ doctype, name }) {
   if (doctype === props.doctype && name === props.docname)
     all_activities.reload()
 }
