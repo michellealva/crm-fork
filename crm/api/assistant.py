@@ -439,6 +439,7 @@ def connect_email(provider: Literal["GMail", "Outlook", "Yahoo", "Yandex"], emai
 
 	if provider not in ("GMail", "Outlook", "Yahoo", "Yandex"):
 		frappe.throw(_("Connect {0} in Email settings.").format(provider))
+	frappe.has_permission("Email Account", "write", throw=True)
 	name = frappe.db.get_value("Email Account", {"email_id": email})
 	if not name:
 		doc = frappe.get_doc(
@@ -462,12 +463,19 @@ def connect_email(provider: Literal["GMail", "Outlook", "Yahoo", "Yandex"], emai
 		return {"email_account": doc.name, "connected": False, "needs_password": True}
 
 	doc = frappe.get_doc("Email Account", name)
+	if doc.auth_method == "OAuth":
+		frappe.throw(_("{0} signs in with OAuth. Connect it in Email settings.").format(email))
 	if doc.enable_incoming and doc.enable_outgoing:
 		return {"email_account": doc.name, "connected": True}
 	if not doc.password:
 		return {"email_account": doc.name, "connected": False, "needs_password": True}
-	# saving with them on makes Email Account sign in to the provider, so a wrong password fails here
-	doc.update({"enable_incoming": 1, "enable_outgoing": 1, "default_incoming": 1, "default_outgoing": 1})
+	# saving with them on makes Email Account sign in to the provider, so a wrong password fails here;
+	# awaiting_password would skip that check, as set_email_password knows
+	doc.update({"enable_incoming": 1, "enable_outgoing": 1, "awaiting_password": 0})
+	# becoming a default takes it from every other account, so only take a default nobody holds
+	for default in ("default_incoming", "default_outgoing"):
+		if not frappe.db.exists("Email Account", {default: 1, "name": ("!=", doc.name)}):
+			doc.set(default, 1)
 	doc.save()
 	return {"email_account": doc.name, "connected": True}
 

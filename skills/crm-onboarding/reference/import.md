@@ -77,7 +77,7 @@ Use Frappe's Data Import, the same importer the CRM's own setup page uses. It ru
 4. If a column is mapped wrong or not at all, set the mapping. Keys are the column positions starting at "0", and values are field names or "Don't Import":
    `update("Data Import", ["<name>"], {"template_options": "{\"column_to_field_map\": {\"0\": \"first_name\", \"1\": \"email\"}}"})`
 5. Start it: `run_action("", [], "frappe.core.doctype.data_import.data_import.form_start_import", {"data_import": "<name>"})`.
-6. Check progress with `run_action("", [], "frappe.core.doctype.data_import.data_import.get_import_status", {"data_import_name": "<name>"})`. When it's done, read failed rows from `Data Import Log` (`{"data_import": name, "success": 0}`, fields `row_indexes`, `messages`) and explain them in plain words.
+6. Check progress by reading the import's `status` with `read_records("Data Import", {"name": "<name>"}, fields=["status"])`, which needs no approval. When it's done, read failed rows from `Data Import Log` (`{"data_import": name, "success": 0}`, fields `row_indexes`, `messages`) and explain them in plain words.
 
 Link values (statuses, sources) must exist before you start a Data Import. It won't create them.
 

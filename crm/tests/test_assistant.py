@@ -28,6 +28,8 @@ class TestAssistantFunctions(IntegrationTestCase):
 			self.assertIn(getattr(assistant, name), frappe.whitelisted, name)
 
 	def test_only_reads_run_without_a_card(self):
+		if not hasattr(frappe.read_only()(lambda: None), "read_only"):
+			self.skipTest("this frappe's read_only marks nothing for Flow")
 		# Flow's run_action skips the approval card for a whitelisted function marked read_only
 		for name in READS:
 			self.assertTrue(getattr(getattr(assistant, name), "read_only", False), name)
@@ -97,3 +99,24 @@ class TestAssistantFunctions(IntegrationTestCase):
 		self.assertEqual(assistant.connect_email("GMail", email), {"email_account": email, "connected": True})
 		account.reload()
 		self.assertTrue(account.enable_incoming and account.enable_outgoing and account.default_outgoing)
+
+	def test_connect_email_keeps_another_accounts_default(self):
+		frappe.get_doc(
+			{
+				"doctype": "Email Account",
+				"email_id": "noreply.assistant.test@example.com",
+				"email_account_name": "Noreply Test",
+				"enable_outgoing": 1,
+				"default_outgoing": 1,
+				"smtp_server": "localhost",
+				"password": "x",
+			}
+		).insert()
+		email = "sales.assistant.test2@gmail.com"
+		assistant.connect_email("GMail", email)
+		account = frappe.get_doc("Email Account", email)
+		account.password = "app-password"
+		account.save()
+		assistant.connect_email("GMail", email)
+		self.assertEqual(frappe.db.get_value("Email Account", "Noreply Test", "default_outgoing"), 1)
+		self.assertEqual(frappe.db.get_value("Email Account", email, "default_outgoing"), 0)
