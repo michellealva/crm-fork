@@ -63,6 +63,26 @@ class TestAssistantFunctions(IntegrationTestCase):
 			after_commit=True,
 		)
 
+	def test_task_delete_refreshes_its_timeline(self):
+		lead = frappe.get_doc({"doctype": "CRM Lead", "first_name": "Ira"}).insert(ignore_permissions=True)
+		task = frappe.get_doc(
+			{
+				"doctype": "CRM Task",
+				"title": "Call Ira",
+				"reference_doctype": "CRM Lead",
+				"reference_docname": lead.name,
+			}
+		).insert(ignore_permissions=True)
+		with patch("crm.api.activities.frappe.publish_realtime") as publish:
+			task.delete(ignore_permissions=True)
+		publish.assert_any_call(
+			"crm_activity_update",
+			{"doctype": "CRM Lead", "name": lead.name},
+			doctype="CRM Lead",
+			docname=lead.name,
+			after_commit=True,
+		)
+
 	def test_connect_email_waits_for_the_password(self):
 		email = "sales.assistant.test@gmail.com"
 		first = assistant.connect_email("GMail", email)
