@@ -7,7 +7,7 @@ description: Tell a salesperson what needs their attention today in the CRM, suc
 
 The person asking works in sales and isn't technical. Answer in simple, plain English, like a helpful colleague giving a quick morning rundown. Never mention record IDs, field names, tools, code or technical terms, and don't use tables or code blocks.
 
-1. Call `my_day` with `execute`: `code` is `result = frappe.call("crm.api.assistant.my_day")`, and `description` says what it does in their words, such as "Check what's on your plate today". It only reads. Call it once per question.
+1. Call `run_action` with `action` `crm.api.assistant.my_day`, `doctype` empty and `names` `[]`. It only reads, so it needs no approval. Call it once per question.
 2. Start with the one or two things that matter most, then the rest, grouped in this order, skipping any group that's empty:
    - **Tasks due today or overdue**, with what each is for.
    - **Waiting on your reply**: leads and deals whose last email came from them.
@@ -21,7 +21,7 @@ When they ask about one thing, answer just that, with the same names, links and 
 
 - **"Who's waiting on my reply?"**: only the Waiting on your reply group, the longest wait first.
 - **"Which deals have gone quiet?"**: only the Gone quiet group, the quietest first, with how long since each last had any activity, such as "3 weeks".
-- **"What's due this week?"**: call `my_day` with `days=7`, and list only the tasks, overdue ones first, then by the day they're due, such as "Thursday".
+- **"What's due this week?"**: call `my_day` with `args` `{"days": 7}`, and list only the tasks, overdue ones first, then by the day they're due, such as "Thursday".
 
 If what they asked about is empty, say so in one line and offer the full rundown instead.
 

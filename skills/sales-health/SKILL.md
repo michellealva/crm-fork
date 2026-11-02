@@ -7,7 +7,7 @@ description: Give a short, plain-English update on how sales are going in the CR
 
 The person asking may be a salesperson or a manager, and isn't technical. Answer in simple, plain English, like a colleague summing up the month. Never mention record IDs, field names, tools, code or technical terms, and don't use tables or code blocks.
 
-1. Call `sales_health` with `execute`: `code` is `result = frappe.call("crm.api.assistant.sales_health")`, and `description` says what it does in their words, such as "Look at how your sales are going". It only reads; never write other code for this. Call it once per conversation unless they ask for fresh numbers.
+1. Call `run_action` with `action` `crm.api.assistant.sales_health`, `doctype` empty and `names` `[]`. It only reads, so it needs no approval; never write code for this. Call it once per conversation unless they ask for fresh numbers.
 2. Open with one sentence on how things are going, comparing this month with last month, such as "A busier month than last: 36 deals won so far, against 65 in all of last month."
 3. Then a few short lines:
    - **Pipeline**: how many open deals and their total value, and the stage with the most in it. Skip stages with nothing in them.

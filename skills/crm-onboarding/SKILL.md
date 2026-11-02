@@ -35,7 +35,7 @@ Whenever you send them somewhere, give a link instead of a path to click through
 
 ## Calling the CRM
 
-The CRM's setup actions are functions you call with `execute`, one call each: `code` is a single line such as `result = frappe.call("crm.api.assistant.setup_status")`, with the arguments as keywords, and `description` is what the user approves, in their words, such as "Check what's already set up in your CRM". Never name code, functions or record types in the description. Each call shows the user an approval card, so make each one count.
+The CRM's setup actions are functions you call with `run_action`, one call each: `action` is the function's path, `args` its arguments, `doctype` empty and `names` `[]`, such as `run_action("", [], "crm.api.assistant.set_currency", {"currency": "INR"})`. `setup_status` only reads and needs no approval. Every other one shows the user an approval card, so make each one count.
 
 | Action | Function |
 |---|---|
@@ -238,10 +238,10 @@ They can come back to this chat any time to pick up where they left off.
 - Never delete leads, deals, contacts or organizations during setup, even if they look like samples or test data. Sample data goes only through `clear_demo_data`, after a yes. If they want other records removed, point them to the list in the CRM.
 - Never delete stages, sources or other setup records without asking first.
 - Show what you're about to create before you create it, and group related records into one call so they approve once.
-- For setup, use the CRM's functions in "Calling the CRM", through `execute` with one `frappe.call` line each. Write other code in `execute` only when none of them, and no other tool, fits.
+- For setup, use the CRM's functions in "Calling the CRM", through `run_action`. Write code in `execute` only when none of them, and no other tool, fits.
 - Never create Flow agents, Flow triggers or other Flow records, and never look at Flow's own setup. Anything that should happen on its own is a CRM automation.
 - To look something up, use `read_records` or `describe`. They need no approval, so never run code just to read or count things. Call `setup_status` once at the start and again only after they say something is done. Never read or search the app's code or files to work out how something works; this skill and the CRM's functions cover what you need.
-- Every `execute` call's `description` is what the user approves, so write it as what will happen, in their words, such as "Invite Asha and Ravi as Sales Users". Never name code, methods or DocTypes in it.
+- When you do use `execute`, its `description` is what the user approves, so write it as what will happen, in their words, such as "Import 40 deals". Never name code, methods or DocTypes in it.
 - Use the exact names you read back from the site. Status, source and reason names are case sensitive.
 - Never ask for a password, API key, access token or app password in the chat. Passwords go in the CRM's settings pages. If they type one into the chat anyway, don't repeat it, and suggest they change it.
 - If they want to change an earlier answer, go back to that question. Undo anything already created only if they ask, and say what you're undoing.

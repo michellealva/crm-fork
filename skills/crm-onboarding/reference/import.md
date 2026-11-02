@@ -72,15 +72,12 @@ Use Frappe's Data Import, the same importer the CRM's own setup page uses. It ru
 
 1. Find the uploaded file: `read_records("File", {"file_name": "<their file name>"}, fields=["name", "file_url"], order_by="creation desc", limit=1)`.
 2. Create the import for the record type they chose: `create("Data Import", [{"reference_doctype": "<CRM Lead, Contact or CRM Organization>", "import_type": "Insert New Records", "mute_emails": 1, "import_file": "<file_url>"}])`.
-3. Check the importer's column matching with `execute`:
-   ```python
-   result = frappe.call("frappe.core.doctype.data_import.data_import.get_preview_from_template", data_import="<name>", import_file="<file_url>")
-   ```
+3. Check the importer's column matching: `run_action("", [], "frappe.core.doctype.data_import.data_import.get_preview_from_template", {"data_import": "<name>", "import_file": "<file_url>"})`.
    Each entry in `columns` after the first has a `header_title` and either a `df.fieldname` or `skip_import`.
 4. If a column is mapped wrong or not at all, set the mapping. Keys are the column positions starting at "0", and values are field names or "Don't Import":
    `update("Data Import", ["<name>"], {"template_options": "{\"column_to_field_map\": {\"0\": \"first_name\", \"1\": \"email\"}}"})`
-5. Start it: `frappe.call("frappe.core.doctype.data_import.data_import.form_start_import", data_import="<name>")`.
-6. Check progress with `frappe.call("frappe.core.doctype.data_import.data_import.get_import_status", data_import_name="<name>")`. When it's done, read failed rows from `Data Import Log` (`{"data_import": name, "success": 0}`, fields `row_indexes`, `messages`) and explain them in plain words.
+5. Start it: `run_action("", [], "frappe.core.doctype.data_import.data_import.form_start_import", {"data_import": "<name>"})`.
+6. Check progress with `run_action("", [], "frappe.core.doctype.data_import.data_import.get_import_status", {"data_import_name": "<name>"})`. When it's done, read failed rows from `Data Import Log` (`{"data_import": name, "success": 0}`, fields `row_indexes`, `messages`) and explain them in plain words.
 
 Link values (statuses, sources) must exist before you start a Data Import. It won't create them.
 

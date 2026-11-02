@@ -1,8 +1,9 @@
 # Copyright (c) 2026, Frappe Technologies Pvt. Ltd. and contributors
 # For license information, please see license.txt
 
-"""CRM actions for the site's assistant. Its skills call them with `frappe.call`, so each runs with the
-user's own permissions, like any other whitelisted method."""
+"""CRM actions for the site's assistant. Its skills call them with `run_action`, so each runs with the
+user's own permissions, like any other whitelisted method; the `@frappe.read_only()` ones run without
+an approval card."""
 
 import json
 import re

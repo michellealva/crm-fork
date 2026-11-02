@@ -18,7 +18,7 @@ CRM tracks sales in two documents. A `CRM Lead` is a prospect that is not yet qu
 
 ## 2. Operations
 
-On the site's assistant, call a whitelisted method with `execute`: `code` is one line such as `result = frappe.call("crm.fcrm.doctype.crm_lead.crm_lead.convert_to_deal", lead="CRM-LEAD-2026-00001", if_converted="Return Existing")`, and `description` says in the user's words what will happen, such as "Convert Nina Rao to a deal". Create and update records with `create` and `update`.
+On the site's assistant, call a whitelisted method with `run_action`: `action` is its dotted path, `args` its arguments, `doctype` empty and `names` `[]`, such as `run_action("", [], "crm.fcrm.doctype.crm_lead.crm_lead.convert_to_deal", {"lead": "CRM-LEAD-2026-00001", "if_converted": "Return Existing"})`. A method that only reads runs without approval; any other shows the user a card. Create and update records with `create` and `update`.
 
 - Convert a lead: call `crm.fcrm.doctype.crm_lead.crm_lead.convert_to_deal` with `lead`. It makes the deal, contact and organization and marks the lead converted. It returns the deal name. Pass `if_converted: "Return Existing"` to get the existing deal on a retry instead of a second deal.
 - Read a timeline: call `crm.api.activities.get_activities` with `name` (a lead or deal). It returns field changes, emails, comments, calls, notes, tasks and attachments.
@@ -43,7 +43,7 @@ On the site's assistant, call a whitelisted method with `execute`: `code` is one
 
 The person asking usually works in sales and isn't technical. Talk like a helpful colleague. Never mention record IDs, field names, tools or code.
 
-- **Find the record first.** On the site's assistant, use `read_records`, which needs no approval, never `execute`: `CRM Deal`, then `CRM Lead` with `converted: 0`, filtered on one of `lead_name`, `organization` or `email` per call with `["like", "%<what they said>%"]`, and `fields=["name", "lead_name", "organization", "email", "status"]`. If more than one matches, ask which. If none does, say so and ask.
+- **Find the record first.** On the site's assistant, use `read_records`, which needs no approval: `CRM Deal`, then `CRM Lead` with `converted: 0`, filtered on one of `lead_name`, `organization` or `email` per call with `["like", "%<what they said>%"]`, and `fields=["name", "lead_name", "organization", "email", "status"]`. If more than one matches, ask which. If none does, say so and ask.
 - **Emails.** For a reply, read their last emails first: `read_records("Communication", {"reference_doctype": <lead or deal>, "reference_name": <its name>}, fields=["subject", "content", "sent_or_received", "communication_date"], order_by="communication_date desc", limit=3)`. Write in the user's voice: short, friendly, plain text, with their name at the end. Show the whole draft, subject first, with who it goes to and the lead or deal as a link, and send only after they say so. If no email account can send, say email isn't connected yet. If someone unsubscribed, say they asked not to get emails.
 - **Notes and calls.** Write what they told you, in their words, tidied up. Title a call like "Call with Nina". Don't make up details they didn't give.
 - **Tasks.** A short title of what to do, such as "Call Nina about pricing". Turn "Friday" or "next week" into a date from today's date, and say the day back to them, such as "Friday 24 October, 10 am". Without a time, use 10 am. It goes to them unless they name a teammate; check the teammate is an enabled user with `read_records("User", ...)`.
