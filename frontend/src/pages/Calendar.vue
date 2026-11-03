@@ -4,6 +4,11 @@
       <ViewBreadcrumbs routeName="Calendar" />
     </template>
     <template #right-header>
+      <Button
+        :label="__('Booking pages')"
+        icon-left="lucide-calendar-plus"
+        @click="openBookingPages"
+      />
       <ShortcutTooltip :label="__('Create Event')" combo="Mod+E">
         <Button
           variant="solid"
@@ -187,8 +192,14 @@ import {
 } from 'frappe-ui/experimental'
 import { onMounted, ref, computed, provide, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
+import { activeSettingsPage, showSettings } from '@/composables/settings'
 
 const { user } = sessionStore()
+
+function openBookingPages() {
+  activeSettingsPage.value = 'Booking Pages'
+  showSettings.value = true
+}
 const { $dialog } = globalStore()
 const { settings } = getSettings()
 const { users, getUser } = usersStore()

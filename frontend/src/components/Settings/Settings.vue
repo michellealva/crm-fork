@@ -77,6 +77,7 @@ import LeadSyncSourcePage from '@/components/Settings/LeadSyncing/LeadSyncSource
 import DefaultsSettings from '@/components/Settings/DefaultsSettings.vue'
 import BrandSettings from '@/components/Settings/BrandSettings.vue'
 import CalendarSettings from '@/components/Settings/CalendarSettings.vue'
+import BookingPagesSettings from '@/components/Settings/BookingPages/BookingPagesSettings.vue'
 import HomeActions from '@/components/Settings/HomeActions.vue'
 import FormsSettings from '@/components/Settings/Forms/FormsSettings.vue'
 import GeneralSettings from '@/components/Settings/GeneralSettings.vue'
@@ -124,6 +125,11 @@ const tabs = computed(() => {
           label: __('Preferences'),
           icon: SlidersIcon,
           component: markRaw(PreferencesSettings),
+        },
+        {
+          label: __('Booking Pages'),
+          icon: CalendarIcon,
+          component: markRaw(BookingPagesSettings),
         },
       ],
     },

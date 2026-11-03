@@ -153,6 +153,47 @@ def reschedule_booking(token: str, start: str) -> dict:
 	return public_booking(booking, page, event)
 
 
+# Managing pages
+
+
+@frappe.whitelist()
+def list_pages() -> list[dict]:
+	pages = frappe.get_list(
+		"CRM Booking Page",
+		fields=["name", "title", "route", "enabled", "duration", "location_type"],
+		order_by="creation desc",
+	)
+	hosts = frappe.get_all(
+		"CRM Booking Page Host",
+		filters={"parenttype": "CRM Booking Page", "parent": ["in", [p.name for p in pages] or [""]]},
+		fields=["parent", "user"],
+		order_by="idx",
+	)
+	for page in pages:
+		page.hosts = [h.user for h in hosts if h.parent == page.name]
+	return pages
+
+
+@frappe.whitelist()
+def create_page(title: str, route: str) -> str:
+	"""A new page hosted by the current user, open 9 to 5 on weekdays."""
+	user_tz = frappe.db.get_value("User", frappe.session.user, "time_zone")
+	page = frappe.get_doc(
+		{
+			"doctype": "CRM Booking Page",
+			"title": title,
+			"route": route,
+			"enabled": 0,
+			"timezone": valid_timezone(user_tz) or get_system_timezone(),
+			"hosts": [{"user": frappe.session.user}],
+			"availability": [
+				{"workday": day, "start_time": "09:00:00", "end_time": "17:00:00"} for day in WEEKDAYS[:5]
+			],
+		}
+	).insert()
+	return page.name
+
+
 # Pages and bookings
 
 
