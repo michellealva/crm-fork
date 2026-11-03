@@ -1,0 +1,22 @@
+<p>
+	{% if action == "confirmed" %}{{ _("Your meeting is booked.") }}
+	{% elif action == "rescheduled" %}{{ _("Your meeting has moved to a new time.") }}
+	{% else %}{{ _("This meeting was cancelled.") }}{% endif %}
+</p>
+<p>
+	<strong>{{ title }}</strong><br />
+	{{ when }}<br />
+	{{ _("With") }} {{ with_name }}<br />
+	{% if location %}{{ location }}{% endif %}
+</p>
+{% if reason %}<p>{{ _("Reason") }}: {{ reason }}</p>{% endif %}
+{% if message %}<p>{{ message }}</p>{% endif %}
+{% if answers %}
+<p>
+	{% for question, answer in answers.items() %}<strong>{{ question }}</strong><br />{{ answer }}<br />{% endfor %}
+</p>
+{% endif %}
+{% if record_url %}<p><a href="{{ record_url }}">{{ _("Open in CRM") }}</a></p>{% endif %}
+{% if manage_url %}
+<p><a href="{{ manage_url }}">{{ _("Reschedule or cancel") }}</a></p>
+{% endif %}
