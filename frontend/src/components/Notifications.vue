@@ -90,6 +90,7 @@ import {
   notifications,
   notificationsStore,
 } from '@/stores/notifications'
+import { useEventNotificationAlert } from '@/data/notifications'
 import { globalStore } from '@/stores/global'
 import { timeAgo, sanitizeHTML } from '@/utils'
 import { onClickOutside } from '@vueuse/core'
@@ -98,6 +99,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 
 const { $socket } = globalStore()
 const { mark_as_read, toggle, mark_doc_as_read } = notificationsStore()
+const { handleEventNotification } = useEventNotificationAlert()
 const { capture } = useTelemetry()
 
 const target = ref(null)
@@ -123,10 +125,12 @@ function markAllAsRead() {
 
 onBeforeUnmount(() => {
   $socket.off('crm_notification')
+  $socket.off('event_notification')
 })
 
 onMounted(() => {
   $socket.on('crm_notification', () => notifications.reload())
+  $socket.on('event_notification', (data) => handleEventNotification(data))
 })
 
 function getRoute(notification) {
