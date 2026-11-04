@@ -93,10 +93,8 @@ def book(
 	return public_booking(booking, page, frappe.get_doc("Event", booking.event))
 
 
-def make_booking(page, host, start_utc, guest, reference, answers=None, timezone=None, values=None, by=None):
-	"""The booking and its meeting, with the emails and the host's notification.
-
-	`by` is the CRM user who booked on the guest's behalf; Guest when it's the visitor."""
+def make_booking(page, host, start_utc, guest, reference, answers=None, timezone=None, values=None):
+	"""The booking and its meeting, with the emails and the host's notification."""
 	booking = frappe.get_doc(
 		{
 			"doctype": "CRM Booking",
@@ -115,9 +113,8 @@ def make_booking(page, host, start_utc, guest, reference, answers=None, timezone
 
 	event = create_event(page, booking, values)
 	booking.db_set("event", event.name, update_modified=False)
-	send_booking_emails(page, booking, event, "confirmed", to_host=host != by)
-	if host != by:
-		notify_host(page, booking, "confirmed", by)
+	send_booking_emails(page, booking, event, "confirmed")
+	notify_host(page, booking, "confirmed")
 	return booking
 
 
@@ -232,89 +229,6 @@ def create_page(title: str, route: str, document_type: str = "CRM Lead") -> str:
 		}
 	).insert()
 	return page.name
-
-
-# Booking from a lead or deal
-
-
-@frappe.whitelist()
-def pages_to_book() -> list[dict]:
-	"""Live pages a rep can book a meeting from, theirs first."""
-	pages = frappe.get_all(
-		"CRM Booking Page",
-		filters={"enabled": 1},
-		fields=["name", "title", "route", "duration"],
-		order_by="title",
-	)
-	hosts = frappe.get_all(
-		"CRM Booking Page Host",
-		filters={"parenttype": "CRM Booking Page", "parent": ["in", [p.name for p in pages] or [""]]},
-		fields=["parent", "user"],
-		order_by="idx",
-	)
-	for page in pages:
-		page.hosts = [h.user for h in hosts if h.parent == page.name]
-	return sorted(pages, key=lambda p: frappe.session.user not in p.hosts)
-
-
-@frappe.whitelist()
-def get_host_slots(route: str, start: str, end: str) -> list[dict]:
-	"""Open slots with the hosts free for each, for a rep picking a time and a host."""
-	page = get_page(route)
-	start_utc, end_utc = parse_utc(start), parse_utc(end)
-	if end_utc <= start_utc or end_utc - start_utc > MAX_RANGE:
-		frappe.throw(_("Pick a range of up to six weeks"))
-	slots = available_slots(page, start_utc, end_utc, page_hosts(page))
-	return [
-		{"start": to_iso(s), "hosts": hosts, "suggested": pick_host(page, hosts)}
-		for s, hosts in slots.items()
-	]
-
-
-@frappe.whitelist(methods=["POST"])
-def book_for_record(route: str, start: str, doctype: str, docname: str, host: str | None = None) -> dict:
-	"""Book a meeting for a lead or deal's contact, who gets the usual confirmation
-	with links to reschedule or cancel."""
-	if doctype not in ("CRM Lead", "CRM Deal"):
-		frappe.throw(_("Meetings can only be booked for leads and deals"))
-	frappe.has_permission(doctype, "write", docname, throw=True)
-	page = get_page(route)
-	guest, values = record_guest(doctype, docname)
-
-	start_utc = parse_utc(start)
-	hosts = page_hosts(page)
-	lock_hosts(hosts)
-	free_hosts = available_slots(page, start_utc, start_utc + timedelta(minutes=page.duration), hosts).get(
-		start_utc
-	)
-	if not free_hosts or (host and host not in free_hosts):
-		frappe.throw(_("That time was just taken. Please pick another one."), exc=SlotUnavailableError)
-	host = host or pick_host(page, free_hosts)
-
-	booking = make_booking(
-		page, host, start_utc, guest, (doctype, docname), values=values, by=frappe.session.user
-	)
-	return {"booking": booking.name, "event": booking.event}
-
-
-def record_guest(doctype, docname) -> tuple[dict, dict]:
-	"""Who the meeting is with (the lead, or the deal's primary contact), and the
-	record's fields for the meeting title's placeholders."""
-	doc = frappe.get_doc(doctype, docname)
-	email = (doc.get("email") or "").strip().lower()
-	if not email:
-		frappe.throw(_("Add an email address first, so the invite has somewhere to go"))
-	name = doc.get("lead_name") or " ".join(filter(None, (doc.get("first_name"), doc.get("last_name"))))
-	if not name and doctype == "CRM Deal":
-		contact = next((c.contact for c in doc.contacts if c.is_primary), None)
-		name = contact and frappe.db.get_value("Contact", contact, "full_name")
-	guest = {
-		"guest_name": name or email.split("@")[0],
-		"guest_email": email,
-		"guest_phone": doc.get("mobile_no") or doc.get("phone"),
-	}
-	values = {k: v for k, v in doc.as_dict().items() if isinstance(v, str | int | float) and v}
-	return guest, values
 
 
 # Pages and bookings
@@ -874,29 +788,23 @@ def send_booking_emails(page, booking, event, action: str, to_host: bool = True)
 	)
 
 
-def notify_host(page, booking, action: str, by: str | None = None):
-	"""An in-app notification for the host, opening the lead or deal's events.
-
-	`by` is a teammate who booked for the guest; otherwise the guest did it."""
+def notify_host(page, booking, action: str):
+	"""An in-app notification for the host, opening the lead or deal's events."""
 	if not booking.reference_docname:
 		return
 	esc = frappe.utils.escape_html
 	host_tz = frappe.db.get_value("User", booking.host, "time_zone") or get_system_timezone()
 	guest = f'<span class="font-medium text-ink-gray-9">{esc(booking.guest_name)}</span>'
 	title = f'<span class="font-medium text-ink-gray-9">{esc(page.title)}</span>'
-	if by:
-		who = f'<span class="font-medium text-ink-gray-9">{esc(frappe.db.get_value("User", by, "full_name"))}</span>'
-		what = _("{0} booked {1} with {2}").format(who, title, guest)
-	else:
-		what = {
-			"confirmed": _("{0} booked {1}"),
-			"rescheduled": _("{0} moved {1}"),
-			"cancelled": _("{0} cancelled {1}"),
-		}[action].format(guest, title)
+	what = {
+		"confirmed": _("{0} booked {1}"),
+		"rescheduled": _("{0} moved {1}"),
+		"cancelled": _("{0} cancelled {1}"),
+	}[action].format(guest, title)
 	frappe.get_doc(
 		{
 			"doctype": "CRM Notification",
-			"from_user": by or "Guest",
+			"from_user": "Guest",
 			"to_user": booking.host,
 			"type": "Booking",
 			"message": frappe.utils.strip_html(what),

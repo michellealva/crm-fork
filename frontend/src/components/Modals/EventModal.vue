@@ -38,194 +38,160 @@
     </template>
     <template #default>
       <div class="flex flex-col gap-4">
-        <div v-if="canBook" class="flex items-center">
+        <div class="flex items-center">
           <div class="text-base text-ink-gray-7 w-3/12">
-            {{ __('Booking page') }}
+            {{ __('Title') }}
           </div>
-          <div class="w-9/12">
-            <FormControl
-              v-model="bookingRoute"
-              type="select"
+          <div class="flex gap-1 w-9/12">
+            <Dropdown class="" :options="colors">
+              <div
+                class="flex items-center justify-center size-7 shrink-0 border border-outline-gray-2 bg-surface-base hover:border-outline-gray-3 hover:shadow-sm rounded-4 cursor-pointer"
+              >
+                <div
+                  class="size-2.5 rounded-full cursor-pointer"
+                  :style="{
+                    backgroundColor: _event.color || '#30A66D',
+                  }"
+                />
+              </div>
+            </Dropdown>
+            <TextInput
+              ref="title"
+              v-model="_event.title"
+              class="w-full"
+              size="sm"
+              :placeholder="__('Call with John Doe')"
               variant="outline"
-              :options="bookingPageOptions"
+              required
             />
           </div>
         </div>
-        <template v-if="bookingRoute">
-          <BookingSlotPicker
-            v-model:start="booking.start"
-            v-model:host="booking.host"
-            :route="bookingRoute"
-          />
-          <div class="text-p-sm text-ink-gray-5">
-            {{
-              email
-                ? __(
-                    '{0} gets an invite with links to reschedule or cancel. The title, place and length come from the booking page.',
-                    [email],
-                  )
-                : __(
-                    'Add an email address first, so the invite has somewhere to go.',
-                  )
-            }}
+        <div class="flex items-center">
+          <div class="text-base text-ink-gray-7 w-3/12">
+            {{ __('All Day') }}
           </div>
-        </template>
-        <template v-else>
-          <div class="flex items-center">
-            <div class="text-base text-ink-gray-7 w-3/12">
-              {{ __('Title') }}
-            </div>
-            <div class="flex gap-1 w-9/12">
-              <Dropdown class="" :options="colors">
-                <div
-                  class="flex items-center justify-center size-7 shrink-0 border border-outline-gray-2 bg-surface-base hover:border-outline-gray-3 hover:shadow-sm rounded-4 cursor-pointer"
-                >
-                  <div
-                    class="size-2.5 rounded-full cursor-pointer"
-                    :style="{
-                      backgroundColor: _event.color || '#30A66D',
-                    }"
-                  />
-                </div>
-              </Dropdown>
-              <TextInput
-                ref="title"
-                v-model="_event.title"
-                class="w-full"
-                size="sm"
-                :placeholder="__('Call with John Doe')"
-                variant="outline"
-                required
-              />
-            </div>
+          <Switch v-model="_event.isFullDay" />
+        </div>
+        <div class="border-t border-outline-gray-1" />
+        <div class="flex items-center">
+          <div class="text-base text-ink-gray-7 w-3/12">
+            {{ __('Date & Time') }}
           </div>
-          <div class="flex items-center">
-            <div class="text-base text-ink-gray-7 w-3/12">
-              {{ __('All Day') }}
-            </div>
-            <Switch v-model="_event.isFullDay" />
+          <div class="flex gap-2 w-9/12">
+            <DatePicker
+              :class="[_event.isFullDay ? 'w-full' : 'w-[158px]']"
+              variant="outline"
+              :modelValue="_event.fromDate"
+              :format="getFormat('', '', true, false, false)"
+              :placeholder="__('Select date')"
+              :clearable="false"
+              @update:modelValue="(date) => updateDate(date, true)"
+            >
+              <template #suffix="{ open, setOpen }">
+                <span
+                  class="lucide-chevron-down h-4 w-4 cursor-pointer"
+                  aria-hidden="true"
+                  @click="setOpen(!open)"
+                />
+              </template>
+            </DatePicker>
+            <TimePicker
+              v-if="!_event.isFullDay"
+              class="max-w-[112px]"
+              variant="outline"
+              :modelValue="_event.fromTime"
+              :placeholder="__('Start Time')"
+              @update:modelValue="(time) => updateTime(time, true)"
+            />
+            <TimePicker
+              v-if="!_event.isFullDay"
+              class="max-w-[112px]"
+              variant="outline"
+              :modelValue="_event.toTime"
+              :options="toOptions"
+              :placeholder="__('End Time')"
+              placement="bottom-end"
+              @update:modelValue="(time) => updateTime(time)"
+            />
           </div>
-          <div class="border-t border-outline-gray-1" />
-          <div class="flex items-center">
-            <div class="text-base text-ink-gray-7 w-3/12">
-              {{ __('Date & Time') }}
-            </div>
-            <div class="flex gap-2 w-9/12">
-              <DatePicker
-                :class="[_event.isFullDay ? 'w-full' : 'w-[158px]']"
-                variant="outline"
-                :modelValue="_event.fromDate"
-                :format="getFormat('', '', true, false, false)"
-                :placeholder="__('Select date')"
-                :clearable="false"
-                @update:modelValue="(date) => updateDate(date, true)"
-              >
-                <template #suffix="{ open, setOpen }">
-                  <span
-                    class="lucide-chevron-down h-4 w-4 cursor-pointer"
-                    aria-hidden="true"
-                    @click="setOpen(!open)"
-                  />
-                </template>
-              </DatePicker>
-              <TimePicker
-                v-if="!_event.isFullDay"
-                class="max-w-[112px]"
-                variant="outline"
-                :modelValue="_event.fromTime"
-                :placeholder="__('Start Time')"
-                @update:modelValue="(time) => updateTime(time, true)"
-              />
-              <TimePicker
-                v-if="!_event.isFullDay"
-                class="max-w-[112px]"
-                variant="outline"
-                :modelValue="_event.toTime"
-                :options="toOptions"
-                :placeholder="__('End Time')"
-                placement="bottom-end"
-                @update:modelValue="(time) => updateTime(time)"
-              />
-            </div>
+        </div>
+        <div class="flex items-start">
+          <div class="text-base text-ink-gray-7 mt-1.5 w-3/12">
+            {{ __('Attendees') }}
           </div>
-          <div class="flex items-start">
-            <div class="text-base text-ink-gray-7 mt-1.5 w-3/12">
-              {{ __('Attendees') }}
-            </div>
-            <div class="w-9/12">
-              <Attendee
-                v-model="peoples"
-                :validate="validateEmail"
-                :error-message="
-                  (value) => __('{0} is an invalid email address', [value])
-                "
-              />
-            </div>
+          <div class="w-9/12">
+            <Attendee
+              v-model="peoples"
+              :validate="validateEmail"
+              :error-message="
+                (value) => __('{0} is an invalid email address', [value])
+              "
+            />
           </div>
-          <div class="flex items-start">
-            <div class="text-base text-ink-gray-7 mt-1.5 w-3/12">
-              {{ __('Visibility') }}
-            </div>
-            <div class="w-9/12">
-              <FormControl
-                v-model="_event.eventType"
-                class="w-full"
-                type="select"
-                :options="[
-                  {
-                    label: __('Private'),
-                    value: 'Private',
-                  },
-                  {
-                    label: __('Public'),
-                    value: 'Public',
-                  },
-                ]"
-                variant="outline"
-                :placeholder="__('Private or Public')"
-              />
-            </div>
+        </div>
+        <div class="flex items-start">
+          <div class="text-base text-ink-gray-7 mt-1.5 w-3/12">
+            {{ __('Visibility') }}
           </div>
-          <div class="flex items-start">
-            <div class="text-base text-ink-gray-7 mt-1.5 w-3/12">
-              {{ __('Location') }}
-            </div>
-            <div class="w-9/12">
-              <TextInput
-                v-model="_event.location"
-                class="w-full"
-                size="sm"
-                variant="outline"
-                :placeholder="__('Add Location')"
-              />
-            </div>
+          <div class="w-9/12">
+            <FormControl
+              v-model="_event.eventType"
+              class="w-full"
+              type="select"
+              :options="[
+                {
+                  label: __('Private'),
+                  value: 'Private',
+                },
+                {
+                  label: __('Public'),
+                  value: 'Public',
+                },
+              ]"
+              variant="outline"
+              :placeholder="__('Private or Public')"
+            />
           </div>
-          <div class="flex">
-            <div class="mt-2 text-base text-ink-gray-7 w-3/12">
-              {{ __('Description') }}
-            </div>
-            <div class="w-9/12">
-              <RichTextField
-                editor-class="!prose-sm overflow-auto min-h-[80px] max-h-80 py-1.5 px-2 rounded-4 border border-outline-gray-2 placeholder-ink-gray-4 hover:border-outline-gray-3 hover:border-outline-elevation-2 hover:shadow-sm focus:bg-surface-base focus:border-outline-gray-4 focus:ring-0 focus-visible:ring-2 focus-visible:ring-outline-gray-3 text-ink-gray-8 transition-colors"
-                :content="_event.description"
-                :placeholder="__('Add Description.')"
-                @change="(val) => (_event.description = val)"
-              />
-            </div>
+        </div>
+        <div class="flex items-start">
+          <div class="text-base text-ink-gray-7 mt-1.5 w-3/12">
+            {{ __('Location') }}
           </div>
-          <div class="border-t border-outline-gray-1" />
-          <div class="flex">
-            <div class="mt-1.5 text-base text-ink-gray-7 w-3/12">
-              {{ __('Notifications') }}
-            </div>
-            <div class="w-9/12">
-              <EventNotifications
-                v-model="_event.notifications"
-                :isAllDay="_event.isFullDay"
-              />
-            </div>
+          <div class="w-9/12">
+            <TextInput
+              v-model="_event.location"
+              class="w-full"
+              size="sm"
+              variant="outline"
+              :placeholder="__('Add Location')"
+            />
           </div>
-        </template>
+        </div>
+        <div class="flex">
+          <div class="mt-2 text-base text-ink-gray-7 w-3/12">
+            {{ __('Description') }}
+          </div>
+          <div class="w-9/12">
+            <RichTextField
+              editor-class="!prose-sm overflow-auto min-h-[80px] max-h-80 py-1.5 px-2 rounded-4 border border-outline-gray-2 placeholder-ink-gray-4 hover:border-outline-gray-3 hover:border-outline-elevation-2 hover:shadow-sm focus:bg-surface-base focus:border-outline-gray-4 focus:ring-0 focus-visible:ring-2 focus-visible:ring-outline-gray-3 text-ink-gray-8 transition-colors"
+              :content="_event.description"
+              :placeholder="__('Add Description.')"
+              @change="(val) => (_event.description = val)"
+            />
+          </div>
+        </div>
+        <div class="border-t border-outline-gray-1" />
+        <div class="flex">
+          <div class="mt-1.5 text-base text-ink-gray-7 w-3/12">
+            {{ __('Notifications') }}
+          </div>
+          <div class="w-9/12">
+            <EventNotifications
+              v-model="_event.notifications"
+              :isAllDay="_event.isFullDay"
+            />
+          </div>
+        </div>
       </div>
     </template>
     <template #actions>
@@ -239,15 +205,6 @@
         <div class="flex gap-2 justify-end">
           <Button :label="__('Cancel')" @click="show = false" />
           <Button
-            v-if="bookingRoute"
-            variant="solid"
-            :label="__('Book meeting')"
-            :disabled="!booking.start || !email"
-            :loading="booking.loading"
-            @click="bookMeeting"
-          />
-          <Button
-            v-else
             variant="solid"
             :label="
               mode === 'edit'
@@ -273,7 +230,6 @@
 import EventNotifications from '@/components/Calendar/EventNotifications.vue'
 import Attendee from '@/components/Calendar/Attendee.vue'
 import RichTextField from '@/components/RichTextField.vue'
-import BookingSlotPicker from '@/components/Calendar/BookingSlotPicker.vue'
 import {
   Switch,
   ErrorMessage,
@@ -282,10 +238,6 @@ import {
   TimePicker,
   dayjs,
   Dropdown,
-  FormControl,
-  call,
-  createResource,
-  toast,
 } from 'frappe-ui'
 import { globalStore } from '@/stores/global'
 import { validateEmail, getFormat } from '@/utils'
@@ -297,14 +249,12 @@ import {
   validateTimeRange,
 } from '@/composables/event'
 import { CalendarColorMap as colorMap } from 'frappe-ui/experimental'
-import { onMounted, ref, reactive, computed, h } from 'vue'
+import { onMounted, ref, computed, h } from 'vue'
 
 const props = defineProps({
   event: { type: Object, default: () => ({}) },
   doctype: { type: String, default: '' },
   docname: { type: String, default: '' },
-  // the lead or deal's email, where a booking page's invite goes
-  email: { type: String, default: '' },
 })
 
 const { $dialog } = globalStore()
@@ -532,51 +482,6 @@ function deleteEvent() {
       },
     ],
   })
-}
-
-// Booking from a booking page: only its open times, a host in turn, and an
-// invite the contact can reschedule or cancel from
-const canBook = computed(
-  () =>
-    mode.value === 'create' &&
-    ['CRM Lead', 'CRM Deal'].includes(props.doctype) &&
-    bookablePages.data?.length,
-)
-const bookablePages = createResource({
-  url: 'crm.api.booking.pages_to_book',
-  cache: 'bookable-pages',
-  auto: ['CRM Lead', 'CRM Deal'].includes(props.doctype),
-})
-const bookingPageOptions = computed(() => [
-  { label: __('None'), value: '' },
-  ...(bookablePages.data || []).map((p) => ({
-    label: `${p.title} · ${__('{0} min', [p.duration])}`,
-    value: p.route,
-  })),
-])
-const bookingRoute = ref('')
-const booking = reactive({ start: '', host: '', loading: false })
-
-async function bookMeeting() {
-  error.value = null
-  booking.loading = true
-  try {
-    await call('crm.api.booking.book_for_record', {
-      route: bookingRoute.value,
-      start: booking.start,
-      doctype: props.doctype,
-      docname: props.docname,
-      host: booking.host,
-    })
-    await eventsResource.reload()
-    toast.success(__('Meeting booked'))
-    show.value = false
-  } catch (e) {
-    error.value =
-      e?.messages?.[0] || e?.message || __('Could not book the meeting')
-  } finally {
-    booking.loading = false
-  }
 }
 
 const toOptions = computed(() => buildEndTimeOptions(_event.value.fromTime))

@@ -5,7 +5,6 @@
     :event="activeEvent"
     :doctype="doctype"
     :docname="doc?.name"
-    :email="doc?.email"
   />
 </template>
 <script setup>

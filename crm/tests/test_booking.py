@@ -6,9 +6,7 @@ from frappe.tests.utils import FrappeTestCase
 from crm.api.booking import (
 	SlotUnavailableError,
 	book,
-	book_for_record,
 	cancel_booking,
-	get_host_slots,
 	get_slots,
 	reschedule_booking,
 	to_iso,
@@ -435,50 +433,3 @@ class TestBooking(FrappeTestCase):
 			frappe.db.get_value("Event", booking.event, "subject"),
 			"Demo · Vera Visitor · Intro call · {unknown}",
 		)
-
-	def test_a_rep_books_a_meeting_for_a_lead(self):
-		page = self.make_page(HOSTS)
-		lead = frappe.get_doc(
-			{
-				"doctype": "CRM Lead",
-				"first_name": "Lena",
-				"last_name": "Lead",
-				"email": "lena@example.com",
-				"lead_owner": HOSTS[0],
-			}
-		).insert(ignore_permissions=True)
-		slot = next(
-			s
-			for s in get_host_slots(page.route, to_iso(self.monday), to_iso(self.at(24)))
-			if s["start"] == to_iso(self.at(9))
-		)
-		self.assertEqual(set(slot["hosts"]), set(HOSTS))
-
-		frappe.set_user(HOSTS[0])
-		result = book_for_record(page.route, to_iso(self.at(9)), "CRM Lead", lead.name, host=HOSTS[1])
-		frappe.set_user("Administrator")
-		booking = frappe.get_doc("CRM Booking", result["booking"])
-		self.assertEqual(
-			(booking.host, booking.guest_email, booking.guest_name),
-			(HOSTS[1], "lena@example.com", "Lena Lead"),
-		)
-		self.assertEqual(
-			frappe.db.get_value("Event", booking.event, ["reference_docname", "owner"]), (lead.name, HOSTS[1])
-		)
-		# the host hears who booked it for them
-		self.assertIn(
-			"booked Intro call with Lena Lead",
-			frappe.get_all("CRM Notification", {"to_user": HOSTS[1]}, pluck="message")[0],
-		)
-
-		# the other host is still free at 9, and can't be double-booked
-		self.assertIn(to_iso(self.at(9)), self.slots_on_monday(page))
-		with self.assertRaises(SlotUnavailableError):
-			book_for_record(page.route, to_iso(self.at(9)), "CRM Lead", lead.name, host=HOSTS[1])
-
-	def test_booking_for_a_lead_needs_an_email(self):
-		lead = frappe.get_doc({"doctype": "CRM Lead", "first_name": "No Email"}).insert(
-			ignore_permissions=True
-		)
-		with self.assertRaises(frappe.ValidationError):
-			book_for_record(self.page.route, to_iso(self.at(9)), "CRM Lead", lead.name)
