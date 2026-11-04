@@ -324,7 +324,7 @@
                                   variant="solid"
                                   :label="__('Apply')"
                                   :disabled="!copyTargets.length"
-                                  @click="(copyTimes(day), close())"
+                                  @click="copyTimes(day), close()"
                                 />
                               </div>
                             </template>

@@ -22,7 +22,12 @@ export const navigationItems = [
   { label: 'Organizations', icon: OrganizationsIcon, route: 'Organizations' },
   { label: 'Notes', icon: NoteIcon, route: 'Notes' },
   { label: 'Tasks', icon: TaskIcon, route: 'Tasks' },
-  { label: 'Calendar', icon: CalendarIcon, route: 'Calendar', desktopOnly: true },
+  {
+    label: 'Calendar',
+    icon: CalendarIcon,
+    route: 'Calendar',
+    desktopOnly: true,
+  },
   { label: 'Call Logs', icon: PhoneIcon, route: 'Call Logs' },
 ]
 

@@ -21,11 +21,7 @@ def get_context(context):
 		context.csrf_token = ""
 	context.page_data = public_page(page)
 	form = booking_form(page)
-	context.update(
-		form_fields_context(form)
-		if form
-		else {"fields": [], "layout": [], "link_options": {}}
-	)
+	context.update(form_fields_context(form) if form else {"fields": [], "layout": [], "link_options": {}})
 	context.draft_preview = not page.enabled
 	return context
 

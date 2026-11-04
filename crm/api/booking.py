@@ -46,7 +46,8 @@ MAX_BOOKINGS_PER_PAGE_PER_HOUR = 30
 HOST_LOCK_SECONDS = 30
 
 
-@frappe.whitelist(allow_guest=True)
+# Public page: free slots of a live page, rate limited
+@frappe.whitelist(allow_guest=True)  # nosemgrep: guest-whitelisted-method
 @rate_limit(limit=300, seconds=60 * 60)
 def get_slots(route: str, start: str, end: str, token: str | None = None) -> list[str]:
 	"""Open slot start times between `start` and `end`, as UTC ISO strings.
@@ -61,7 +62,8 @@ def get_slots(route: str, start: str, end: str, token: str | None = None) -> lis
 	return [to_iso(s) for s in available_slots(page, start_utc, end_utc, hosts, booking)]
 
 
-@frappe.whitelist(allow_guest=True, methods=["POST"])
+# Public page: visitors book without an account, rate limited
+@frappe.whitelist(allow_guest=True, methods=["POST"])  # nosemgrep: guest-whitelisted-method
 @rate_limit(limit=10, seconds=60 * 60)
 def book(
 	route: str,
@@ -127,7 +129,8 @@ def make_booking(page, host, start_utc, guest, reference, answers=None, timezone
 	return booking
 
 
-@frappe.whitelist(allow_guest=True)
+# Guest's own booking, found only by its secret token
+@frappe.whitelist(allow_guest=True)  # nosemgrep: guest-whitelisted-method
 def get_booking(token: str) -> dict:
 	booking = get_booking_by_token(token, confirmed_only=False)
 	page = frappe.get_doc("CRM Booking Page", booking.booking_page)
@@ -135,7 +138,8 @@ def get_booking(token: str) -> dict:
 	return public_booking(booking, page, event)
 
 
-@frappe.whitelist(allow_guest=True, methods=["POST"])
+# Guest's own booking, found only by its secret token, rate limited
+@frappe.whitelist(allow_guest=True, methods=["POST"])  # nosemgrep: guest-whitelisted-method
 @rate_limit(limit=20, seconds=60 * 60)
 def cancel_booking(token: str, reason: str | None = None) -> dict:
 	booking = get_booking_by_token(token)
@@ -157,7 +161,8 @@ def cancel_booking(token: str, reason: str | None = None) -> dict:
 	return public_booking(booking, page, event)
 
 
-@frappe.whitelist(allow_guest=True, methods=["POST"])
+# Guest's own booking, found only by its secret token, rate limited
+@frappe.whitelist(allow_guest=True, methods=["POST"])  # nosemgrep: guest-whitelisted-method
 @rate_limit(limit=20, seconds=60 * 60)
 def reschedule_booking(token: str, start: str) -> dict:
 	booking = get_booking_by_token(token)

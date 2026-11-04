@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import re
+from itertools import pairwise
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import frappe
@@ -77,7 +78,7 @@ class CRMBookingPage(Document):
 			by_day.setdefault(row.workday, []).append((start, end))
 		for day, ranges in by_day.items():
 			ranges.sort()
-			for (_start, prev_end), (next_start, _end) in zip(ranges, ranges[1:]):
+			for (_start, prev_end), (next_start, _end) in pairwise(ranges):
 				if next_start < prev_end:
 					frappe.throw(_("{0}: hours overlap").format(_(day)))
 
