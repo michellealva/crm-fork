@@ -59,11 +59,9 @@
                 }}{{ page.route }}
               </div>
             </div>
-            <div
-              class="w-3/12 cursor-pointer"
-              @click="emit('open', page.name)"
-            >
+            <div class="w-3/12 cursor-pointer" @click="emit('open', page.name)">
               <MultipleAvatar
+                class="w-fit"
                 :avatars="page.hosts.map((u: string) => hostAvatar(u))"
                 size="sm"
               />
@@ -78,7 +76,9 @@
               <Dropdown
                 align="end"
                 :options="rowOptions(page)"
-                @update:open="(open: boolean) => open && (isConfirmingDelete = false)"
+                @update:open="
+                  (open: boolean) => open && (isConfirmingDelete = false)
+                "
               >
                 <Button icon="lucide-more-horizontal" variant="ghost" />
               </Dropdown>
@@ -113,6 +113,12 @@
           />
         </div>
       </div>
+      <FormControl
+        v-model="draft.document_type"
+        type="select"
+        :label="__('Each booking creates a')"
+        :options="createsOptions"
+      />
       <ErrorMessage v-if="createError" :message="createError" />
     </div>
     <template #actions>
@@ -133,6 +139,7 @@ import MultipleAvatar from '@/components/MultipleAvatar.vue'
 import CalendarIcon from '@/components/Icons/CalendarIcon.vue'
 import { usersStore } from '@/stores/users'
 import { ConfirmDelete } from '@/utils'
+import { createDialog } from '@/utils/dialogs'
 import {
   Badge,
   Button,
@@ -155,6 +162,7 @@ interface BookingPageRow {
   enabled: 0 | 1
   duration: number
   hosts: string[]
+  bookings: number
 }
 
 const emit = defineEmits<{ open: [name: string] }>()
@@ -165,18 +173,27 @@ const isConfirmingDelete = ref(false)
 
 function hostAvatar(email: string) {
   const user = getUser(email)
-  return { name: email, label: user?.full_name || email, image: user?.user_image }
+  return {
+    name: email,
+    label: user?.full_name || email,
+    image: user?.user_image,
+  }
 }
 
 const showCreate = ref(false)
 const creating = ref(false)
 const createError = ref('')
-const draft = reactive({ title: '', route: '' })
+const draft = reactive({ title: '', route: '', document_type: 'CRM Lead' })
+const createsOptions = [
+  { label: __('Lead'), value: 'CRM Lead' },
+  { label: __('Deal'), value: 'CRM Deal' },
+]
 let routeEdited = false
 
 function openCreate() {
   draft.title = ''
   draft.route = ''
+  draft.document_type = 'CRM Lead'
   routeEdited = false
   createError.value = ''
   showCreate.value = true
@@ -198,6 +215,7 @@ async function createPage() {
     const name = await call('crm.api.booking.create_page', {
       title: draft.title,
       route,
+      document_type: draft.document_type,
     })
     showCreate.value = false
     emit('open', name)
@@ -220,13 +238,47 @@ async function setEnabled(page: BookingPageRow, enabled: boolean) {
   pages.reload()
 }
 
+// a page with bookings is kept, so its bookings keep their history; it can be turned off
 async function deletePage(page: BookingPageRow) {
-  await call('frappe.client.delete', {
-    doctype: 'CRM Booking Page',
-    name: page.name,
-  })
-  pages.reload()
-  toast.success(__('Page deleted'))
+  if (page.bookings) {
+    createDialog({
+      title: __("This page can't be deleted"),
+      message:
+        page.bookings === 1
+          ? __(
+              'It has 1 booking, which keeps its link to the page. Turn the page off instead so nobody new can book.',
+            )
+          : __(
+              'It has {0} bookings, which keep their link to the page. Turn the page off instead so nobody new can book.',
+              [page.bookings],
+            ),
+      size: 'sm',
+      actions: [
+        {
+          label: page.enabled ? __('Turn off') : __('OK'),
+          variant: 'solid',
+          onClick: ({ close }: { close: () => void }) => {
+            close()
+            if (page.enabled) setEnabled(page, false)
+          },
+        },
+      ],
+    })
+    return
+  }
+  try {
+    await call('frappe.client.delete', {
+      doctype: 'CRM Booking Page',
+      name: page.name,
+    })
+    pages.reload()
+    toast.success(__('Page deleted'))
+  } catch (e) {
+    toast.error(
+      (e as { messages?: string[] })?.messages?.[0] ||
+        __('Could not delete the page'),
+    )
+  }
 }
 
 function rowOptions(page: BookingPageRow) {

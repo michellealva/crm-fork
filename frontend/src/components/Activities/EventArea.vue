@@ -20,13 +20,9 @@
           class="mb-1 flex items-center justify-stretch gap-2 py-1 text-base"
         >
           <div class="inline-flex items-center flex-wrap gap-1 text-ink-gray-5">
-            <Avatar
-              :image="event.owner.image"
-              :label="event.owner.label"
-              size="md"
-            />
+            <UserAvatar :user="ownerOf(event)" size="md" />
             <span class="font-medium text-ink-gray-8 ml-1">
-              {{ event.owner.label }}
+              {{ getUser(ownerOf(event))?.full_name || ownerOf(event) }}
             </span>
             <span>{{ 'has created an event' }}</span>
           </div>
@@ -35,11 +31,11 @@
           </div>
         </div>
         <div
-          class="flex gap-2 border cursor-pointer border-outline-elevation-2 rounded-lg bg-surface-elevation-1 px-2.5 py-2.5 text-ink-gray-9"
+          class="flex gap-2 border cursor-pointer border-outline-elevation-2 rounded-6 bg-surface-elevation-1 px-2.5 py-2.5 text-ink-gray-9"
           @click="showEvent(event)"
         >
           <div
-            class="flex w-[2px] rounded-lg"
+            class="flex w-[2px] rounded-6"
             :style="{ backgroundColor: event.color || '#30A66D' }"
           />
           <div class="flex-1 flex flex-col gap-1 text-base">
@@ -84,8 +80,14 @@ import CalendarIcon from '@/components/Icons/CalendarIcon.vue'
 import MultipleAvatar from '@/components/MultipleAvatar.vue'
 import { useEvent, showEventModal, activeEvent } from '@/composables/event'
 import TimelineTimestamp from '@/components/Activities/TimelineTimestamp.vue'
-import { Avatar } from 'frappe-ui'
+import UserAvatar from '@/components/UserAvatar.vue'
+import { usersStore } from '@/stores/users'
 
+const { getUser } = usersStore()
+
+// the owner arrives as an email, and becomes an object once participants load
+const ownerOf = (event) =>
+  typeof event.owner === 'object' ? event.owner?.name : event.owner
 const props = defineProps({
   doctype: { type: String, default: '' },
   docname: { type: String, default: '' },

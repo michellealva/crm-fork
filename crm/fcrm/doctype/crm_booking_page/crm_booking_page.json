@@ -25,12 +25,15 @@
   "buffer",
   "min_notice",
   "max_days_ahead",
-  "questions_section",
-  "questions",
+  "form_section",
+  "document_type",
+  "web_form",
   "after_booking_section",
   "create_lead",
   "lead_source",
-  "confirmation_message"
+  "event_title",
+  "confirmation_message",
+  "allowed_embedding_domains"
  ],
  "fields": [
   {
@@ -157,16 +160,26 @@
    "default": "30"
   },
   {
-   "fieldname": "questions_section",
+   "fieldname": "form_section",
    "fieldtype": "Section Break",
-   "label": "Questions"
+   "label": "Form"
   },
   {
-   "fieldname": "questions",
-   "fieldtype": "Table",
-   "label": "Questions",
-   "options": "CRM Booking Question",
-   "description": "Name and email are always asked."
+   "fieldname": "document_type",
+   "fieldtype": "Select",
+   "label": "Creates",
+   "options": "CRM Lead\nCRM Deal",
+   "default": "CRM Lead",
+   "set_only_once": 1,
+   "description": "What a booking from someone new creates"
+  },
+  {
+   "fieldname": "web_form",
+   "fieldtype": "Link",
+   "label": "Form",
+   "options": "Web Form",
+   "description": "This page's own form, edited on the page. Name and email go to the lead or deal.",
+   "read_only": 1
   },
   {
    "fieldname": "after_booking_section",
@@ -176,25 +189,38 @@
   {
    "fieldname": "create_lead",
    "fieldtype": "Check",
-   "label": "Create a lead for new visitors",
+   "label": "Create a record for new people",
    "default": "1"
   },
   {
    "fieldname": "lead_source",
    "fieldtype": "Link",
-   "label": "Lead Source",
+   "label": "Source",
    "options": "CRM Lead Source",
-   "depends_on": "create_lead"
+   "depends_on": "create_lead",
+   "description": "Set on the lead or deal a booking creates"
+  },
+  {
+   "fieldname": "event_title",
+   "fieldtype": "Data",
+   "label": "Meeting title",
+   "description": "The meeting's name on the calendar. Use {guest}, {host}, {page} or a form field like {organization_name}. Blank: {page} with {guest}"
   },
   {
    "fieldname": "confirmation_message",
    "fieldtype": "Small Text",
    "label": "Confirmation message"
+  },
+  {
+   "fieldname": "allowed_embedding_domains",
+   "fieldtype": "Small Text",
+   "label": "Allowed embedding domains",
+   "description": "Sites where this page may be embedded, one per line"
   }
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-11-03 12:00:00.000000",
+ "modified": "2026-11-03 23:20:00.000000",
  "modified_by": "Administrator",
  "module": "FCRM",
  "name": "CRM Booking Page",

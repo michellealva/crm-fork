@@ -231,12 +231,27 @@ def _seed_hidden_fields(document_type: str) -> list[dict]:
 	return hidden
 
 
-def _check_manager():
+def _check_manager(form_name: str | None = None, booking_editors: bool = False):
 	"""CRM forms are managed by CRM managers, not Website Managers. Gate here and
-	then write the Web Form with ignore_permissions (the role mismatch, in code)."""
+	then write the Web Form with ignore_permissions (the role mismatch, in code).
+
+	A booking page's own form can also be edited by whoever can edit that page
+	(`form_name`), and the builder's lookups are open to them (`booking_editors`)."""
 	roles = set(frappe.get_roles())
-	if not roles & {"System Manager", "Sales Manager"}:
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if roles & {"System Manager", "Sales Manager"}:
+		return
+	if form_name:
+		page = frappe.db.get_value("CRM Booking Page", {"web_form": form_name})
+		if page and frappe.has_permission("CRM Booking Page", "write", doc=page):
+			return
+	elif booking_editors and frappe.has_permission("CRM Booking Page", "write"):
+		return
+	frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+
+def booking_page_forms() -> list[str]:
+	"""Forms owned by booking pages, which are edited there rather than in Forms."""
+	return frappe.get_all("CRM Booking Page", filters={"web_form": ["is", "set"]}, pluck="web_form")
 
 
 @frappe.whitelist()
@@ -261,7 +276,7 @@ def link_field_guest_access(doctype: str) -> dict:
 	"""Whether guests can already select `doctype`. Drives the builder's Link-field
 	notice: if False, the author is warned that the public dropdown will be empty and
 	is offered a one-click grant (grant_guest_link_access)."""
-	_check_manager()
+	_check_manager(booking_editors=True)
 	return {"doctype": doctype, "guest_can_select": guest_can_select(doctype)}
 
 
@@ -329,7 +344,11 @@ def list_forms() -> list[dict]:
 	_check_manager()
 	return frappe.get_all(
 		"Web Form",
-		filters={"module": FORM_MODULE, "doc_type": ["in", ALLOWED_DOCTYPES]},
+		filters={
+			"module": FORM_MODULE,
+			"doc_type": ["in", ALLOWED_DOCTYPES],
+			"name": ["not in", booking_page_forms() or [""]],
+		},
 		fields=[
 			"name",
 			"title",
@@ -345,7 +364,7 @@ def list_forms() -> list[dict]:
 @frappe.whitelist()
 def get_form_config(name: str) -> dict:
 	"""Full config for the builder, read from the native Web Form record."""
-	_check_manager()
+	_check_manager(name)
 	doc = _get_crm_form(name)
 	return {
 		"name": doc.name,
@@ -432,7 +451,11 @@ def _validated_hidden_fields(document_type: str, hidden: list[dict]) -> list[dic
 @frappe.whitelist()
 def save_form(name: str | None, form: dict | str) -> dict:
 	"""Create/update a native Web Form scoped to CRM doctypes."""
-	_check_manager()
+	_check_manager(name)
+	return _save_form(name, form)
+
+
+def _save_form(name: str | None, form: dict | str) -> dict:
 	if isinstance(form, str):
 		form = json.loads(form or "{}")
 

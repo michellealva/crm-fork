@@ -6,15 +6,24 @@
     :doctype="doctype"
     :docname="doc?.name"
   />
+  <BookMeetingModal
+    v-if="showBookMeetingModal"
+    v-model="showBookMeetingModal"
+    :doctype="doctype"
+    :doc="doc"
+    @booked="redirect('events')"
+  />
 </template>
 <script setup>
 import EventModal from '@/components/Modals/EventModal.vue'
+import BookMeetingModal from '@/components/Modals/BookMeetingModal.vue'
 import { showEventModal, activeEvent } from '@/composables/event'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { useTelemetry } from '@framework/ui/telemetry'
 import { useCrmOnboarding } from '@/composables/onboarding'
 import { call } from 'frappe-ui'
 import { useRoute, useRouter } from 'vue-router'
+import { ref } from 'vue'
 
 const props = defineProps({
   doctype: { type: String, default: '' },
@@ -31,6 +40,12 @@ const { capture } = useTelemetry()
 function showEvent(e) {
   showEventModal.value = true
   activeEvent.value = e
+}
+
+// Booking a meeting from a booking page
+const showBookMeetingModal = ref(false)
+function showBookMeeting() {
+  showBookMeetingModal.value = true
 }
 
 // Tasks
@@ -143,6 +158,7 @@ function redirect(tabName) {
 
 defineExpose({
   showEvent,
+  showBookMeeting,
   showTask,
   deleteTask,
   updateTaskStatus,

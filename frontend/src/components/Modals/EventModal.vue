@@ -1,7 +1,7 @@
 <template>
-  <Dialog v-model:open="show" :size="'xl'">
-    <template #body-header>
-      <div class="mb-6 flex items-center justify-between">
+  <Dialog v-model:open="show" :size="'xl'" :show-close-button="false">
+    <template #title>
+      <div class="flex items-center justify-between">
         <div class="flex items-center space-x-2">
           <h3 class="text-3xl-semibold leading-6 text-ink-gray-9">
             {{
@@ -45,7 +45,7 @@
           <div class="flex gap-1 w-9/12">
             <Dropdown class="" :options="colors">
               <div
-                class="flex items-center justify-center size-7 shrink-0 border border-outline-gray-2 bg-surface-base hover:border-outline-gray-3 hover:shadow-sm rounded cursor-pointer"
+                class="flex items-center justify-center size-7 shrink-0 border border-outline-gray-2 bg-surface-base hover:border-outline-gray-3 hover:shadow-sm rounded-4 cursor-pointer"
               >
                 <div
                   class="size-2.5 rounded-full cursor-pointer"
@@ -81,17 +81,17 @@
             <DatePicker
               :class="[_event.isFullDay ? 'w-full' : 'w-[158px]']"
               variant="outline"
-              :value="_event.fromDate"
-              :format="'MMM D, YYYY'"
-              :placeholder="__('May 1, 2025')"
+              :modelValue="_event.fromDate"
+              :format="getFormat('', '', true, false, false)"
+              :placeholder="__('Select date')"
               :clearable="false"
               @update:modelValue="(date) => updateDate(date, true)"
             >
-              <template #suffix="{ togglePopover }">
+              <template #suffix="{ open, setOpen }">
                 <span
                   class="lucide-chevron-down h-4 w-4 cursor-pointer"
                   aria-hidden="true"
-                  @click="togglePopover"
+                  @click="setOpen(!open)"
                 />
               </template>
             </DatePicker>
@@ -173,7 +173,7 @@
           </div>
           <div class="w-9/12">
             <RichTextField
-              editor-class="!prose-sm overflow-auto min-h-[80px] max-h-80 py-1.5 px-2 rounded border border-outline-gray-2 placeholder-ink-gray-4 hover:border-outline-gray-3 hover:border-outline-elevation-2 hover:shadow-sm focus:bg-surface-base focus:border-outline-gray-4 focus:ring-0 focus-visible:ring-2 focus-visible:ring-outline-gray-3 text-ink-gray-8 transition-colors"
+              editor-class="!prose-sm overflow-auto min-h-[80px] max-h-80 py-1.5 px-2 rounded-4 border border-outline-gray-2 placeholder-ink-gray-4 hover:border-outline-gray-3 hover:border-outline-elevation-2 hover:shadow-sm focus:bg-surface-base focus:border-outline-gray-4 focus:ring-0 focus-visible:ring-2 focus-visible:ring-outline-gray-3 text-ink-gray-8 transition-colors"
               :content="_event.description"
               :placeholder="__('Add Description.')"
               @change="(val) => (_event.description = val)"
@@ -240,7 +240,7 @@ import {
   Dropdown,
 } from 'frappe-ui'
 import { globalStore } from '@/stores/global'
-import { validateEmail } from '@/utils'
+import { validateEmail, getFormat } from '@/utils'
 import {
   useEvent,
   normalizeParticipants,

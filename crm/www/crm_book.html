@@ -53,7 +53,8 @@
         grid-template-columns: 280px 1fr;
         min-height: 480px;
       }
-      .card.narrow { max-width: 560px; grid-template-columns: 1fr; min-height: 0; }
+      /* status and confirm steps: a narrow card, as on Frappe Meet's status screens */
+      .card.narrow { max-width: 460px; grid-template-columns: 1fr; min-height: 0; }
       @media (max-width: 760px) { .card { grid-template-columns: 1fr; } }
       .about { padding: 28px; border-right: 1px solid var(--border); }
       @media (max-width: 760px) { .about { border-right: none; border-bottom: 1px solid var(--border); } }
@@ -140,26 +141,61 @@
         display: none; background: var(--danger-bg); color: var(--danger); font-size: 13px; border-radius: 9px;
         padding: 10px 12px; margin-bottom: 16px;
       }
-      .done { text-align: center; padding: 12px 4px; }
-      .done .ring {
-        width: 48px; height: 48px; border-radius: 999px; margin: 0 auto 16px; display: flex; align-items: center;
-        justify-content: center; background: var(--success-bg); color: var(--success-ink);
+      .done { text-align: center; padding: 8px 0 4px; }
+      .state-icon {
+        width: 48px; height: 48px; border-radius: 999px; margin: 0 auto 16px; display: flex;
+        align-items: center; justify-content: center; background: var(--field); color: var(--muted);
       }
-      .done .ring.off { background: var(--field); color: var(--muted); }
-      .done .ring svg { width: 22px; height: 22px; }
-      .done h2 { font-size: 19px; color: var(--ink-strong); margin: 0 0 6px; }
-      .done p { color: var(--muted); font-size: 14px; margin: 0 0 4px; line-height: 1.5; }
-      .details { text-align: left; background: var(--field); border-radius: 9px; padding: 14px 16px; margin: 20px 0; font-size: 14px; line-height: 1.7; }
-      .details a { color: var(--ink-strong); }
-      .row-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+      .state-icon svg { width: 24px; height: 24px; }
+      .state-icon.success { background: var(--success-bg); color: var(--success-ink); }
+      .state-icon.danger { background: var(--danger-bg); color: var(--danger); }
+      .done h2 { font-size: 20px; font-weight: 600; color: var(--ink-strong); margin: 0 0 6px; letter-spacing: -0.01em; }
+      .done p { color: var(--muted); font-size: 14px; margin: 0; line-height: 1.5; }
+      .details {
+        text-align: left; border: 1px solid var(--border); border-radius: 10px; margin: 24px 0;
+        padding: 6px 0; font-size: 14px;
+      }
+      .details .details-title { padding: 8px 16px 4px; font-size: 14px; font-weight: 600; color: var(--ink-strong); }
+      .details .row { display: flex; align-items: flex-start; gap: 12px; padding: 6px 16px; color: var(--ink); line-height: 1.45; }
+      .details .row svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; color: var(--muted); }
+      .details .row .sub { display: block; color: var(--muted); font-size: 13px; }
+      .details .row.struck span:first-of-type { text-decoration: line-through; color: var(--muted); }
+      .details a { color: var(--ink-strong); word-break: break-all; }
+      /* the page's confirmation message, from the host */
+      .host-message {
+        margin: 20px 0 0; padding: 12px 16px; border-radius: 10px; background: var(--field);
+        text-align: left; font-size: 14px; line-height: 1.55; color: var(--ink); white-space: pre-wrap;
+      }
+      .done-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 10px; }
+      .btn.outline {
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        background: var(--card); color: var(--ink-strong); border: 1px solid var(--border);
+      }
+      .btn.outline:hover { background: var(--field); }
+      .btn.outline svg { width: 16px; height: 16px; color: var(--muted); }
       .draft-banner {
         max-width: 880px; margin: 0 auto 12px; padding: 14px 16px; border-radius: 6px; font-size: 14px;
         background: oklch(0.967 0.045 91.733); color: var(--ink-strong);
       }
       [hidden] { display: none !important; }
+      /* form fields from the page's CRM web form, as crm_form.html lays them out */
+      .section { margin-bottom: 4px; }
+      .section-title { font-size: 15px; font-weight: 600; color: var(--ink-strong); margin: 20px 0 12px; }
+      .cols { display: grid; gap: 0 20px; }
+      @media (max-width: 520px) { .cols { grid-template-columns: 1fr !important; } }
+      .field .desc { font-size: 12px; color: var(--muted); margin-top: 5px; line-height: 1.4; }
+      .check { display: flex; align-items: center; gap: 9px; }
+      .check input { width: 16px; height: 16px; accent-color: var(--accent); }
+      .check label { margin: 0; font-size: 14px; color: var(--ink); }
+      .has-error, .has-error:focus { border-color: var(--danger); box-shadow: 0 0 0 2px var(--danger-bg); }
+      /* embed mode (?embed=1): sit flush inside the host page */
+      body.embed { background: transparent; padding: 0; min-height: 0; }
+      body.embed .card { max-width: none; border: none; border-radius: 0; box-shadow: none; }
+      /* status and confirm steps stay a centered column inside the iframe */
+      body.embed .card.narrow { max-width: 460px; }
     </style>
   </head>
-  <body>
+  <body class="{% if embed %}embed{% endif %}">
     {% if draft_preview %}
     <div class="draft-banner">{{ _("Preview. This page is disabled, so only people who can edit it see it.") }}</div>
     {% endif %}
@@ -201,8 +237,8 @@
               <div class="weekdays" id="weekdays"></div>
               <div class="days" id="days"></div>
               <div class="tz field">
-                <label for="timezone">{{ _("Timezone") }}</label>
-                <select id="timezone"></select>
+                <label for="bk-timezone">{{ _("Timezone") }}</label>
+                <select id="bk-timezone"></select>
               </div>
             </div>
             <div>
@@ -220,19 +256,7 @@
             <button class="link-btn" id="change-time">{{ _("Change") }}</button>
           </div>
           <form id="details-form" novalidate>
-            <div class="field">
-              <label for="full_name">{{ _("Name") }}<span class="req">*</span></label>
-              <input type="text" id="full_name" autocomplete="name" required />
-            </div>
-            <div class="field">
-              <label for="email">{{ _("Email") }}<span class="req">*</span></label>
-              <input type="email" id="email" autocomplete="email" required />
-            </div>
-            <div class="field">
-              <label for="phone">{{ _("Phone") }}</label>
-              <input type="tel" id="phone" autocomplete="tel" />
-            </div>
-            <div id="questions"></div>
+            {% include "crm/templates/includes/crm_form_fields.html" %}
             <div class="actions">
               <button type="submit" class="btn solid" id="confirm-btn">{{ _("Book meeting") }}</button>
             </div>
@@ -266,39 +290,70 @@
           </div>
         </section>
 
-        <!-- 5. a booking: just made, or opened from the email link -->
+        <!-- 5. a booking: just made, or opened from the email link. Laid out like
+             Frappe Meet and Suite status screens: state icon, title, one line, actions -->
         <section id="step-done" hidden>
           <div class="done">
-            <div class="ring" id="done-ring">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </div>
+            <div class="state-icon" id="done-icon"></div>
             <h2 id="done-title"></h2>
             <p id="done-note"></p>
+            <div class="host-message" id="done-message" hidden></div>
             <div class="details" id="done-details"></div>
-            <div class="row-actions" id="done-actions">
-              <button class="btn subtle" id="reschedule-btn">{{ _("Reschedule") }}</button>
-              <button class="btn subtle" id="cancel-btn">{{ _("Cancel") }}</button>
+            <div class="done-actions" id="done-manage">
+              <button class="btn outline" id="reschedule-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h5"/><path d="M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/></svg>
+                {{ _("Reschedule") }}
+              </button>
+              <button class="btn outline" id="cancel-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m14 14-4 4"/><path d="m10 14 4 4"/></svg>
+                {{ _("Cancel meeting") }}
+              </button>
+            </div>
+            <div class="done-actions" id="done-again" hidden>
+              <button class="btn outline" id="book-again-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><path d="M21 13V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M3 10h18"/><path d="M16 19h6"/><path d="M19 16v6"/></svg>
+                {{ _("Book another time") }}
+              </button>
             </div>
           </div>
         </section>
+        <template id="icon-booked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></template>
+        <template id="icon-moved"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h5"/><path d="M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/></svg></template>
+        <template id="icon-cancelled"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m14 14-4 4"/><path d="m10 14 4 4"/></svg></template>
+        <template id="icon-upcoming"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg></template>
+        <template id="icon-past"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg></template>
+        <template id="icon-time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></template>
+        <template id="icon-person"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></template>
+        <template id="icon-video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg></template>
       </main>
     </div>
 
     <script>
       (function () {
         const PAGE = {{ page_data | tojson }};
+        var FIELDS = {{ fields | tojson }};
+        var BREAKS = { "Section Break": 1, "Column Break": 1 };
+{% include "crm/templates/includes/crm_form_logic.js" %}
         const CSRF = {{ (csrf_token or "") | tojson }};
         const T = {
           minutes: {{ _("{0} minutes") | tojson }},
           noSlots: {{ _("No open times this month. Try the next one.") | tojson }},
           pickDay: {{ _("Pick a day") | tojson }},
           loading: {{ _("Loading…") | tojson }},
-          booked: {{ _("You're booked") | tojson }},
-          moved: {{ _("Your meeting has moved") | tojson }},
-          cancelled: {{ _("This meeting was cancelled") | tojson }},
-          upcoming: {{ _("Your meeting") | tojson }},
-          past: {{ _("This meeting has passed") | tojson }},
-          emailed: {{ _("We've emailed the details to {0}.") | tojson }},
+          titles: {
+            booked: {{ _("You're booked") | tojson }},
+            moved: {{ _("Your meeting has moved") | tojson }},
+            upcoming: {{ _("Your meeting is booked") | tojson }},
+            cancelled: {{ _("Meeting cancelled") | tojson }},
+            past: {{ _("This meeting has passed") | tojson }},
+          },
+          notes: {
+            booked: {{ _("We've sent the details to {0}.") | tojson }},
+            moved: {{ _("We've sent the new time to {0}.") | tojson }},
+            upcoming: {{ _("Need a different time? Reschedule or cancel below.") | tojson }},
+            cancelled: {{ _("{1} has been told, and there's nothing else you need to do.") | tojson }},
+          },
+          pickTime: {{ _("Pick a time") | tojson }},
           withHost: {{ _("With {0}") | tojson }},
           bookAgain: {{ _("Book another time") | tojson }},
           pickNewTime: {{ _("Pick a new time") | tojson }},
@@ -309,6 +364,9 @@
             "Custom link": {{ _("Online") | tojson }},
           },
           generic: {{ _("Something went wrong. Please try again.") | tojson }},
+          badPhone: {{ _("{0} isn't a valid phone number") | tojson }},
+          missingOne: {{ _("Please fill in the required field: {0}") | tojson }},
+          missingMany: {{ _("Please fill in all required fields.") | tojson }},
         };
         const $ = (id) => document.getElementById(id);
         const params = new URLSearchParams(location.search);
@@ -568,13 +626,15 @@
           }
           $("chosen-time").textContent = formatRange(date, slotEnd(date));
           show("details");
-          $("full_name").focus();
+          // the form's first input
+          const firstInput = $("details-form").querySelector("input, select, textarea");
+          if (firstInput) firstInput.focus();
         }
 
         // Timezone select
 
         function renderTimezones() {
-          const select = $("timezone");
+          const select = $("bk-timezone");
           let zones = [];
           try {
             zones = Intl.supportedValuesOf("timeZone");
@@ -595,59 +655,62 @@
           });
         }
 
-        // Questions
+        const PHONE_RE = /^[0-9 +_\-,.*#()]{1,20}$/;
+        function isPhone(f) {
+          return f.fieldtype === "Phone" || f.options === "Phone";
+        }
 
-        function renderQuestions() {
-          const box = $("questions");
-          PAGE.questions.forEach((q) => {
-            const field = document.createElement("div");
-            field.className = "field";
-            const label = document.createElement("label");
-            label.htmlFor = "q-" + q.name;
-            label.textContent = q.label;
-            if (q.reqd) {
-              const req = document.createElement("span");
-              req.className = "req";
-              req.textContent = "*";
-              label.appendChild(req);
+        // the form's visible fields, checked the way crm_form.html checks them
+        function collectFormValues() {
+          const doc = collectDoc();
+          const values = {};
+          const missing = [];
+          const invalid = [];
+          FIELDS.forEach((f) => {
+            if (BREAKS[f.fieldtype]) return;
+            const el = document.getElementById(f.fieldname);
+            if (!el) return;
+            el.classList.remove("has-error");
+            if (!isVisible(f, doc)) return;
+            const val = f.fieldtype === "Check" ? (el.checked ? 1 : 0) : el.value;
+            values[f.fieldname] = val;
+            const empty = f.fieldtype === "Check" ? val === 0 : val === "" || val == null;
+            if (isRequired(f, doc) && !isReadOnly(f, doc) && empty) {
+              missing.push({ el, label: f.label || f.fieldname });
+              el.classList.add("has-error");
+            } else if (!empty && isPhone(f) && !PHONE_RE.test(String(val).trim())) {
+              // same pattern as frappe.utils.validate_phone_number, checked before sending
+              invalid.push({ el, message: T.badPhone.replace("{0}", f.label || f.fieldname) });
+              el.classList.add("has-error");
             }
-            let input;
-            if (q.fieldtype === "Long answer") {
-              input = document.createElement("textarea");
-            } else if (q.fieldtype === "Options") {
-              input = document.createElement("select");
-              ["", ...q.options].forEach((o) => {
-                const opt = document.createElement("option");
-                opt.value = o;
-                opt.textContent = o;
-                input.appendChild(opt);
-              });
-            } else {
-              input = document.createElement("input");
-              input.type = q.fieldtype === "Phone" ? "tel" : "text";
-            }
-            input.id = "q-" + q.name;
-            input.dataset.question = q.name;
-            field.append(label, input);
-            box.appendChild(field);
           });
+          return { values, missing, invalid };
         }
 
         async function submitDetails(e) {
           e.preventDefault();
-          const answers = {};
-          let missing = null;
-          document.querySelectorAll("[data-question]").forEach((el) => {
-            answers[el.dataset.question] = el.value.trim();
-          });
-          if (!$("full_name").value.trim()) missing = $("full_name");
-          else if (!/^\S+@\S+\.\S+$/.test($("email").value.trim())) missing = $("email");
-          else
-            PAGE.questions.forEach((q) => {
-              if (!missing && q.reqd && !answers[q.name]) missing = $("q-" + q.name);
-            });
-          if (missing) {
-            missing.focus();
+          showError("");
+          const { values, missing, invalid } = collectFormValues();
+          // same wording as crm_form.html
+          let first = null;
+          if (missing.length) {
+            first = missing[0].el;
+            showError(
+              missing.length === 1
+                ? T.missingOne.replace("{0}", missing[0].label)
+                : T.missingMany
+            );
+          } else if (invalid.length) {
+            first = invalid[0].el;
+            showError(invalid[0].message);
+          }
+          const email = document.getElementById("email");
+          if (!first && email && !/^\S+@\S+\.\S+$/.test(email.value.trim())) {
+            email.classList.add("has-error");
+            first = email;
+          }
+          if (first) {
+            first.focus();
             return;
           }
           const btn = $("confirm-btn");
@@ -658,17 +721,14 @@
               {
                 route: PAGE.route,
                 start: state.slot.toISOString(),
-                full_name: $("full_name").value.trim(),
-                email: $("email").value.trim(),
-                phone: $("phone").value.trim(),
-                answers: answers,
+                values: values,
                 timezone: state.tz,
               },
               true
             );
             showBooking(booking, "booked");
           } catch (err) {
-            if (err.status === 417 || err.status === 409) {
+            if (err.status === 409) {
               // the slot went; go back and pick again with fresh times
               show("pick");
               showError(err.message);
@@ -683,44 +743,87 @@
 
         // Managing a booking
 
+        function iconRow(icon, text, sub, struck) {
+          const row = document.createElement("div");
+          row.className = "row" + (struck ? " struck" : "");
+          row.innerHTML = $("icon-" + icon).innerHTML;
+          const body = document.createElement("div");
+          const main = document.createElement("span");
+          if (text instanceof Node) main.appendChild(text);
+          else main.textContent = text;
+          body.appendChild(main);
+          if (sub) {
+            const subEl = document.createElement("span");
+            subEl.className = "sub";
+            subEl.textContent = sub;
+            body.appendChild(subEl);
+          }
+          row.appendChild(body);
+          return row;
+        }
+
+        // `how` is what just happened here; without it the booking was opened from an email
         function showBooking(booking, how) {
           state.booking = booking;
           state.rescheduling = false;
           const start = new Date(booking.start);
           const end = new Date(booking.end);
           const cancelled = booking.status === "Cancelled";
-          $("done-ring").classList.toggle("off", cancelled || !booking.upcoming);
-          $("done-title").textContent = cancelled
-            ? T.cancelled
-            : how === "booked"
-              ? T.booked
-              : how === "moved"
-                ? T.moved
-                : booking.upcoming
-                  ? T.upcoming
-                  : T.past;
-          $("done-note").textContent = how ? T.emailed.replace("{0}", booking.guest_email) : "";
+          const kind = cancelled ? "cancelled" : how === "booked" ? "booked" : how === "moved" ? "moved" : booking.upcoming ? "upcoming" : "past";
+
+          const icon = $("done-icon");
+          icon.innerHTML = $("icon-" + kind).innerHTML;
+          icon.className = "state-icon" + ({ booked: " success", moved: " success", upcoming: " success", cancelled: " danger" }[kind] || "");
+          $("done-title").textContent = T.titles[kind];
+          $("done-note").textContent = (T.notes[kind] || "")
+            .replace("{0}", booking.guest_email)
+            .replace("{1}", booking.host);
+
+          // shown with a booking that stands, not once it's cancelled or over
+          const message = $("done-message");
+          message.textContent = PAGE.confirmation_message || "";
+          message.hidden = !PAGE.confirmation_message || !["booked", "moved", "upcoming"].includes(kind);
+
           const details = $("done-details");
           details.innerHTML = "";
-          const lines = [booking.page.title, formatRange(start, end) + ` (${state.tz.replace(/_/g, " ")})`, T.withHost.replace("{0}", booking.host)];
-          lines.forEach((text) => {
-            const div = document.createElement("div");
-            div.textContent = text;
-            details.appendChild(div);
-          });
+          const title = document.createElement("div");
+          title.className = "details-title";
+          title.textContent = booking.page.title;
+          details.appendChild(title);
+          details.appendChild(
+            iconRow("time", `${formatDay(start)}, ${formatTime(start)} – ${formatTime(end)}`, state.tz.replace(/_/g, " "), cancelled)
+          );
+          details.appendChild(iconRow("person", T.withHost.replace("{0}", booking.host)));
           if (booking.meeting_link && !cancelled) {
             const a = document.createElement("a");
             a.href = booking.meeting_link;
             a.target = "_blank";
             a.rel = "noopener";
-            a.textContent = booking.meeting_link;
-            details.appendChild(a);
+            a.textContent = booking.meeting_link.replace(/^https?:\/\//, "");
+            details.appendChild(iconRow("video", a));
           }
-          $("done-actions").hidden = cancelled || !booking.upcoming;
+
+          $("done-manage").hidden = kind === "cancelled" || kind === "past";
+          $("done-again").hidden = !$("done-manage").hidden;
           if (how === "booked") {
-            history.replaceState(null, "", `${location.pathname}?booking=${encodeURIComponent(booking.token)}`);
+            const params = new URLSearchParams(location.search);
+            params.set("booking", booking.token);
+            history.replaceState(null, "", `${location.pathname}?${params}`);
           }
           show("done");
+        }
+
+        function bookAgain() {
+          state.booking = null;
+          state.rescheduling = false;
+          const params = new URLSearchParams(location.search);
+          params.delete("booking");
+          const query = params.toString();
+          history.replaceState(null, "", location.pathname + (query ? `?${query}` : ""));
+          $("pick-title").textContent = T.pickTime;
+          show("pick");
+          setMonthFromToday();
+          loadMonth();
         }
 
         async function moveBooking() {
@@ -782,11 +885,19 @@
         $("move-confirm").addEventListener("click", moveBooking);
         $("cancel-back").addEventListener("click", () => showBooking(state.booking));
         $("cancel-confirm").addEventListener("click", cancelBooking);
+        $("book-again-btn").addEventListener("click", bookAgain);
 
         renderAbout();
         renderWeekdays();
         renderTimezones();
-        renderQuestions();
+        // re-apply the form's conditions as people type, and clear a field's error once it's filled
+        ["input", "change"].forEach((type) =>
+          $("details-form").addEventListener(type, (e) => {
+            e.target.classList.remove("has-error");
+            refreshDeps();
+          })
+        );
+        refreshDeps();
         setMonthFromToday();
 
         const token = params.get("booking");

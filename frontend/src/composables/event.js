@@ -4,6 +4,10 @@ import { sameArrayContents } from '@/utils'
 import { computed, ref } from 'vue'
 import { allTimeSlots } from '@/components/Calendar/utils'
 
+// Lists events the usual way, plus ones linked to a lead or deal you can read,
+// so a teammate's meeting on a lead shows on that lead (see crm/api/event.py)
+export const EVENT_LIST_URL = 'crm.api.event.get_event_list'
+
 export const showEventModal = ref(false)
 export const activeEvent = ref(null)
 
@@ -29,6 +33,7 @@ export function useEvent({
 
   const eventsResource = createListResource({
     doctype: 'Event',
+    url: EVENT_LIST_URL,
     cache: ['calendar-events', docname],
     fields: [
       'name',
@@ -55,12 +60,14 @@ export function useEvent({
 
   const eventParticipantsResource = createListResource({
     doctype: 'Event Participants',
+    url: EVENT_LIST_URL,
     fields: ['*'],
     parent: 'Event',
   })
 
   const eventNotificationsResource = createListResource({
     doctype: 'Event Notifications',
+    url: EVENT_LIST_URL,
     fields: ['*'],
     parent: 'Event',
   })

@@ -589,8 +589,9 @@ const tabs = computed(() => {
     },
     {
       name: 'Events',
+      value: 'events',
       label: __('Events'),
-      icon: EventIcon,
+      iconLeft: EventIcon,
     },
     {
       name: 'Calls',

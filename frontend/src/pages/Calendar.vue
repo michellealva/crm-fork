@@ -65,13 +65,13 @@
               :clearable="false"
               @update:modelValue="(val) => onMonthYearChange(val)"
             >
-              <template #target="{ togglePopover }">
+              <template #trigger="{ open, setOpen }">
                 <Button
                   variant="ghost"
                   class="text-lg-medium text-ink-gray-7"
                   :label="currentMonthYear"
                   iconRight="chevron-down"
-                  @click="togglePopover"
+                  @click="setOpen(!open)"
                 />
               </template>
             </DatePicker>
@@ -193,6 +193,7 @@ import {
 import { onMounted, ref, computed, provide, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { activeSettingsPage, showSettings } from '@/composables/settings'
+import { EVENT_LIST_URL } from '@/composables/event'
 
 const { user } = sessionStore()
 
@@ -249,6 +250,7 @@ function buildEventOrFilters() {
 
 const events = createListResource({
   doctype: 'Event',
+  url: EVENT_LIST_URL,
   fields: [
     'name',
     'status',

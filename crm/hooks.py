@@ -255,6 +255,10 @@ if int(frappe.__version__.split(".")[0]) < 16:
 # Hook on document methods and events
 
 doc_events = {
+	"Event": {
+		"on_update": ["crm.api.booking.sync_booking_from_event"],
+		"on_trash": ["crm.api.booking.sync_booking_from_event"],
+	},
 	"Contact": {
 		"validate": ["crm.api.contact.validate"],
 	},
