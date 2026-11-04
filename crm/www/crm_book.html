@@ -13,22 +13,25 @@
     />
     <style>
       :root {
-        /* same frappe-ui light-theme tokens as crm_form.html */
-        --ink-strong: oklch(0.168 0 0);
-        --ink: oklch(0.205 0 0);
-        --muted: oklch(0.586 0 0);
-        --faint: oklch(0.683 0 0);
-        --border: oklch(0.913 0 0);
-        --border-focus: oklch(0.83 0 0);
-        --bg: oklch(0.964 0 0);
-        --card: oklch(1 0 0);
-        --field: oklch(0.964 0 0);
-        --accent: oklch(0.205 0 0);
-        --accent-hover: oklch(0.341 0 0);
-        --danger: oklch(0.507 0.165 25.286);
-        --danger-bg: oklch(0.978 0.011 17.34);
-        --success-bg: oklch(0.965 0.03 155.987);
-        --success-ink: oklch(0.506 0.118 155.358);
+        /* frappe-ui light-theme tokens */
+        --ink-strong: oklch(0.168 0 0);         /* ink-gray-9 */
+        --ink: oklch(0.205 0 0);                /* ink-gray-8 */
+        --muted: oklch(0.586 0 0);              /* ink-gray-5 */
+        --faint: oklch(0.683 0 0);              /* ink-gray-4 */
+        --border: oklch(0.913 0 0);             /* outline-gray-2 */
+        --border-focus: oklch(0.83 0 0);        /* outline-gray-3 */
+        --bg: oklch(0.964 0 0);                 /* surface-gray-2 */
+        --card: oklch(1 0 0);                   /* surface-base */
+        --field: oklch(0.964 0 0);              /* surface-gray-2 */
+        --field-hover: oklch(0.946 0 0);        /* surface-gray-3 */
+        --accent: oklch(0.205 0 0);             /* surface-gray-10 */
+        --accent-hover: oklch(0.341 0 0);       /* surface-gray-9 */
+        --danger: oklch(0.556 0.198 26.552);    /* surface-red-7, red solid button */
+        --danger-hover: oklch(0.497 0.185 27.335); /* surface-red-8 */
+        --danger-ink: oklch(0.497 0.185 27.335);   /* ink-red-7 */
+        --danger-bg: oklch(0.978 0.011 17.34);  /* surface-red-1 */
+        --success-bg: oklch(0.965 0.03 155.987); /* surface-green-2 */
+        --success-ink: oklch(0.53 0.122 156.15); /* ink-green-7 */
         --ring: oklch(0.586 0 0 / 0.15);
       }
       * { box-sizing: border-box; }
@@ -106,7 +109,7 @@
       .tz { margin-top: 20px; max-width: 320px; }
       .field { margin-bottom: 16px; }
       .field label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--muted); }
-      .field .req { color: var(--danger); margin-left: 2px; }
+      .field .req { color: var(--danger-ink); margin-left: 2px; }
       input, textarea, select {
         width: 100%; font: inherit; font-size: 14px; line-height: 1.4; color: var(--ink); background: var(--field);
         border: 1px solid transparent; border-radius: 8px; padding: 6px 10px; outline: none;
@@ -134,11 +137,12 @@
       .btn.solid { color: oklch(1 0 0); background: var(--accent); }
       .btn.solid:hover { background: var(--accent-hover); }
       .btn.subtle { color: var(--ink); background: var(--field); }
-      .btn.subtle:hover { background: var(--border); }
+      .btn.subtle:hover { background: var(--field-hover); }
       .btn.danger { color: oklch(1 0 0); background: var(--danger); }
+      .btn.danger:hover { background: var(--danger-hover); }
       .btn:disabled { opacity: 0.5; cursor: default; }
       .error {
-        display: none; background: var(--danger-bg); color: var(--danger); font-size: 13px; border-radius: 9px;
+        display: none; background: var(--danger-bg); color: var(--danger-ink); font-size: 13px; border-radius: 9px;
         padding: 10px 12px; margin-bottom: 16px;
       }
       .done { text-align: center; padding: 8px 0 4px; }
@@ -148,7 +152,7 @@
       }
       .state-icon svg { width: 24px; height: 24px; }
       .state-icon.success { background: var(--success-bg); color: var(--success-ink); }
-      .state-icon.danger { background: var(--danger-bg); color: var(--danger); }
+      .state-icon.danger { background: var(--danger-bg); color: var(--danger-ink); }
       .done h2 { font-size: 20px; font-weight: 600; color: var(--ink-strong); margin: 0 0 6px; letter-spacing: -0.01em; }
       .done p { color: var(--muted); font-size: 14px; margin: 0; line-height: 1.5; }
       .details {
