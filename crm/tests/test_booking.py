@@ -275,7 +275,7 @@ class TestBooking(FrappeTestCase):
 		self.assertEqual(lead.first_name, "Vera")
 		self.assertEqual(frappe.parse_json(booking.answers), {"Company": "Acme", "Team size": "11-50"})
 
-	def test_form_answers_only_fill_empty_fields_of_an_existing_lead(self):
+	def test_a_booking_never_changes_an_existing_lead(self):
 		self.add_fields()
 		lead = frappe.get_doc(
 			{
@@ -285,13 +285,15 @@ class TestBooking(FrappeTestCase):
 				"organization": "Old Co",
 			}
 		).insert(ignore_permissions=True)
+		before = lead.no_of_employees
 		self.book_as_guest(
 			self.at(9),
 			email="known@example.com",
-			values={"organization": "New Co", "no_of_employees": "1-10"},
+			values={"organization": "New Co", "no_of_employees": "51-200"},
 		)
 		lead.reload()
-		self.assertEqual((lead.organization, lead.no_of_employees), ("Old Co", "1-10"))
+		# anyone can type anyone's email, so the answers stay on the booking
+		self.assertEqual((lead.organization, lead.no_of_employees), ("Old Co", before))
 
 	def test_required_form_fields_and_options_are_enforced(self):
 		self.add_fields()
@@ -354,11 +356,11 @@ class TestBooking(FrappeTestCase):
 
 		lead.reload()
 		self.assertEqual(lead.lead_owner, HOSTS[1])
-		self.assertTrue(
+		self.assertFalse(
 			frappe.db.exists(
 				"DocShare", {"user": HOSTS[0], "share_doctype": "CRM Lead", "share_name": lead.name}
 			),
-			"the host can open the lead",
+			"booking with someone's email must not open their lead to the host",
 		)
 		to_owner = frappe.get_all(
 			"CRM Notification", filters={"to_user": HOSTS[1], "type": "Booking"}, pluck="message"
@@ -369,6 +371,94 @@ class TestBooking(FrappeTestCase):
 			"CRM Notification", filters={"to_user": HOSTS[0], "type": "Booking"}, pluck="message"
 		)
 		self.assertEqual(len(to_host), 1)
+
+	def test_a_sales_user_cannot_edit_or_join_someone_elses_page(self):
+		frappe.set_user(HOSTS[1])
+		page = frappe.get_doc("CRM Booking Page", self.page.name)
+		page.append("hosts", {"user": HOSTS[1]})
+		with self.assertRaises(frappe.PermissionError):
+			page.save()
+		self.assertFalse(frappe.has_permission("CRM Booking Page", "write", doc=self.page.name))
+		self.assertTrue(frappe.has_permission("CRM Booking Page", "read", doc=self.page.name))
+
+	def test_hosts_must_be_crm_users(self):
+		website_user = "booking-website-user@example.com"
+		if not frappe.db.exists("User", website_user):
+			frappe.get_doc(
+				{"doctype": "User", "email": website_user, "first_name": "Web", "user_type": "Website User"}
+			).insert(ignore_permissions=True)
+		for host in ("Guest", website_user):
+			self.page.append("hosts", {"user": host})
+			with self.assertRaises(frappe.ValidationError):
+				self.page.save()
+			self.page.reload()
+
+	def test_a_page_cannot_take_over_another_form(self):
+		other = self.make_page([HOSTS[0]])
+		self.page.web_form = other.web_form
+		with self.assertRaises(frappe.ValidationError):
+			self.page.save()
+
+	def test_a_sales_user_sees_only_their_bookings_and_never_the_token(self):
+		result = self.book_as_guest(self.at(9))
+		name = frappe.db.get_value("CRM Booking", {"token": result["token"]})
+		frappe.set_user(HOSTS[1])
+		self.assertEqual(frappe.get_list("CRM Booking", pluck="name"), [])
+		self.assertFalse(frappe.has_permission("CRM Booking", "read", doc=name))
+		frappe.set_user(HOSTS[0])
+		rows = frappe.get_list("CRM Booking", fields=["name", "token"])
+		self.assertEqual([r.name for r in rows], [name])
+		self.assertFalse(rows[0].get("token"), "the cancel link's token is for managers only")
+
+	def test_guest_text_is_escaped_in_the_host_email(self):
+		self.add_fields()
+		result = self.book_as_guest(
+			self.at(9),
+			values={"organization": "<form action=https://evil.example>", "no_of_employees": "1-10"},
+		)
+		import email
+
+		queued = frappe.get_all(
+			"Email Queue",
+			filters={
+				"reference_doctype": "CRM Booking",
+				"reference_name": frappe.db.get_value("CRM Booking", {"token": result["token"]}),
+			},
+			pluck="message",
+		)
+		html = [
+			part.get_payload(decode=True).decode()
+			for message in queued
+			for part in email.message_from_string(message).walk()
+			if part.get_content_type() == "text/html"
+		]
+		self.assertTrue(any("&lt;form action=https://evil.example&gt;" in h for h in html))
+		# the plain-text copy shows the answer as typed, which is harmless there
+		self.assertFalse(any("<form action" in h for h in html))
+
+	def test_one_email_cannot_fill_the_calendar(self):
+		self.book_as_guest(self.at(9))
+		self.book_as_guest(self.at(10))
+		with self.assertRaises(frappe.ValidationError):
+			self.book_as_guest(self.at(11))
+
+	def test_meeting_links_must_be_web_links(self):
+		self.page.location_type = "Custom link"
+		self.page.location = "javascript:alert(1)"
+		with self.assertRaises(frappe.ValidationError):
+			self.page.save()
+
+	def test_visitor_text_in_titles_and_invites_stays_harmless(self):
+		from crm.api.booking import ics, plain
+
+		self.assertEqual(plain("Claim your prize at https://evil.example now"), "Claim your prize at now")
+		self.assertEqual(plain("Go to evil.example/login"), "Go to")
+		result = self.book_as_guest(
+			self.at(9), values={"first_name": "Eve\r\nATTENDEE:mailto:x@evil.example"}
+		)
+		booking = frappe.get_doc("CRM Booking", {"token": result["token"]})
+		invite = ics(self.page, booking, "Host", "host@example.com", "")
+		self.assertNotIn("\r\nATTENDEE:mailto:x@evil", invite)
 
 	def test_deleting_a_page_without_bookings_removes_its_form(self):
 		from crm.api.booking import list_pages

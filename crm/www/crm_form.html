@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{ form_title }}</title>
+    <title>{{ form_title|e }}</title>
     <meta name="robots" content="noindex" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -178,8 +178,8 @@
     {% endif %}
     <div class="card">
       <div id="form-view">
-        <h1 class="title{% if not form_description %} title-only{% endif %}">{{ form_title }}</h1>
-        {% if form_description %}<p class="subtitle">{{ form_description }}</p>{% endif %}
+        <h1 class="title{% if not form_description %} title-only{% endif %}">{{ form_title|e }}</h1>
+        {% if form_description %}<p class="subtitle">{{ form_description|e }}</p>{% endif %}
 
         <div class="form-error" id="form-error"></div>
         <div class="form-ok" id="form-ok"></div>
@@ -189,14 +189,14 @@
 
           <div class="actions">
             <button type="reset" class="discard" id="discard-btn">{{ _("Discard") }}</button>
-            <button type="submit" class="submit" id="submit-btn">{{ submit_label }}</button>
+            <button type="submit" class="submit" id="submit-btn">{{ submit_label|e }}</button>
           </div>
         </form>
       </div>
 
       <div class="success" id="success-view" style="display: none">
         <div class="check-ring">&#10003;</div>
-        <h2 id="success-title">{{ success_message }}</h2>
+        <h2 id="success-title">{{ success_message|e }}</h2>
         <p id="success-note">Your response has been recorded.</p>
         <p class="redirect-note" id="redirect-note" style="display: none"></p>
       </div>

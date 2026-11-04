@@ -4,19 +4,19 @@
 	{% else %}{{ _("This meeting was cancelled.") }}{% endif %}
 </p>
 <p>
-	<strong>{{ title }}</strong><br />
-	{{ when }}<br />
-	{{ _("With") }} {{ with_name }}<br />
-	{% if location %}{{ location }}{% endif %}
+	<strong>{{ title|e }}</strong><br />
+	{{ when|e }}<br />
+	{{ _("With") }} {{ with_name|e }}<br />
+	{% if location %}{{ location|e }}{% endif %}
 </p>
-{% if reason %}<p>{{ _("Reason") }}: {{ reason }}</p>{% endif %}
-{% if message %}<p>{{ message }}</p>{% endif %}
+{% if reason %}<p>{{ _("Reason") }}: {{ reason|e }}</p>{% endif %}
+{% if message %}<p>{{ message|e }}</p>{% endif %}
 {% if answers %}
 <p>
-	{% for question, answer in answers.items() %}<strong>{{ question }}</strong><br />{{ answer }}<br />{% endfor %}
+	{% for question, answer in answers.items() %}<strong>{{ question|e }}</strong><br />{{ answer|e }}<br />{% endfor %}
 </p>
 {% endif %}
-{% if record_url %}<p><a href="{{ record_url }}">{{ _("Open in CRM") }}</a></p>{% endif %}
+{% if record_url %}<p><a href="{{ record_url|e }}">{{ _("Open in CRM") }}</a></p>{% endif %}
 {% if manage_url %}
-<p><a href="{{ manage_url }}">{{ _("Reschedule or cancel") }}</a></p>
+<p><a href="{{ manage_url|e }}">{{ _("Reschedule or cancel") }}</a></p>
 {% endif %}

@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 import frappe
 from frappe import _
 from frappe.query_builder.functions import Max
-from frappe.utils import add_to_date, now_datetime
+from frappe.utils import add_to_date, cint, now_datetime
 
 
 def trigger_offset_event_notifications():
@@ -467,6 +467,7 @@ def _send_system_notification(notification, interval):
 # the user can read. Writes still go through Frappe's own Event permissions.
 
 EVENT_DOCTYPES = ("Event", "Event Participants", "Event Notifications")
+MAX_EVENT_ROWS = 2000
 
 
 def can_see_event(row: dict) -> bool:
@@ -491,6 +492,8 @@ def get_event_list(
 	if doctype not in EVENT_DOCTYPES:
 		frappe.throw(_("Not an event list"), frappe.PermissionError)
 	frappe.has_permission("Event", "read", throw=True)
+	# each row gets its own permission check, so never load an unbounded list
+	limit = min(cint(limit) or MAX_EVENT_ROWS, MAX_EVENT_ROWS)
 	fields = frappe.parse_json(fields) or ["*"]
 	rows = frappe.get_all(
 		doctype,

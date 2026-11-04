@@ -23,10 +23,50 @@ class CRMBookingPage(Document):
 			except (ZoneInfoNotFoundError, ValueError):
 				frappe.throw(_("{0} is not a valid timezone").format(self.timezone))
 		self.validate_hours()
+		self.validate_editor()
+		self.validate_hosts()
+		self.validate_location()
 		self.ensure_form()
+
+	def validate_editor(self):
+		"""Sales Users edit only pages they host. Checked against the saved hosts, so
+		nobody can add themselves to someone else's page."""
+		if is_page_manager() or self.is_new():
+			return
+		saved = frappe.get_all(
+			"CRM Booking Page Host", filters={"parent": self.name, "parenttype": self.doctype}, pluck="user"
+		)
+		if frappe.session.user not in saved:
+			frappe.throw(_("Only this page's hosts can change it"), frappe.PermissionError)
+
+	def validate_hosts(self):
 		hosts = [h.user for h in self.hosts]
 		if len(hosts) != len(set(hosts)):
 			frappe.throw(_("A host is listed more than once"))
+		crm_users = set(
+			frappe.get_all(
+				"Has Role",
+				filters={
+					"parenttype": "User",
+					"parent": ["in", hosts or [""]],
+					"role": ["in", ["Sales User", "Sales Manager", "System Manager"]],
+				},
+				pluck="parent",
+			)
+		)
+		system_users = set(
+			frappe.get_all(
+				"User", filters={"name": ["in", hosts or [""]], "user_type": "System User"}, pluck="name"
+			)
+		)
+		for host in hosts:
+			if host == "Guest" or host not in crm_users or host not in system_users:
+				frappe.throw(_("{0} can't host bookings: they aren't a CRM user").format(host))
+
+	def validate_location(self):
+		if self.location_type == "Custom link" and self.location:
+			if not re.match(r"^https?://", self.location.strip(), re.IGNORECASE):
+				frappe.throw(_("The meeting link must start with https:// or http://"))
 
 	def validate_hours(self):
 		by_day = {}
@@ -46,6 +86,10 @@ class CRMBookingPage(Document):
 		Bookings need an email, so the form always asks for one."""
 		from crm.api.form import _save_form
 
+		if not self.is_new() and self.has_value_changed("web_form"):
+			frappe.throw(_("A booking page's form can't be swapped for another"))
+		if self.web_form and not is_own_form(self.web_form, self.name):
+			frappe.throw(_("A booking page can only use the form made for it"))
 		if not self.web_form:
 			# Web Forms are named after their title, so make it unique; it's never shown
 			key = frappe.generate_hash(length=10).lower()
@@ -69,5 +113,33 @@ class CRMBookingPage(Document):
 
 	def after_delete(self):
 		# the page's own form goes with it (bookings block deleting a page that has any)
-		if self.web_form and frappe.db.exists("Web Form", self.web_form):
+		if self.web_form and frappe.db.exists("Web Form", self.web_form) and is_own_form(self.web_form):
 			frappe.delete_doc("Web Form", self.web_form, ignore_permissions=True, force=True)
+
+
+def is_page_manager(user: str | None = None) -> bool:
+	return bool({"System Manager", "Sales Manager"} & set(frappe.get_roles(user)))
+
+
+def is_own_form(web_form: str, page: str | None = None) -> bool:
+	"""Whether `web_form` is one a booking page made for itself, and no other page uses it."""
+	if not (frappe.db.get_value("Web Form", web_form, "route") or "").startswith("crm-booking-"):
+		return False
+	others = frappe.get_all(
+		"CRM Booking Page", filters={"web_form": web_form, "name": ["!=", page or ""]}, limit=1
+	)
+	return not others
+
+
+def has_permission(doc, ptype, user=None):
+	"""Anyone in sales can see pages; a Sales User changes or deletes only pages they host."""
+	if ptype in ("read", "select", "print", "email", "report", "export", "share") or is_page_manager(user):
+		return True
+	if doc.is_new():
+		return True
+	user = user or frappe.session.user
+	return bool(
+		frappe.db.exists(
+			"CRM Booking Page Host", {"parent": doc.name, "parenttype": doc.doctype, "user": user}
+		)
+	)

@@ -241,8 +241,14 @@ def _check_manager(form_name: str | None = None, booking_editors: bool = False):
 	if roles & {"System Manager", "Sales Manager"}:
 		return
 	if form_name:
+		from crm.fcrm.doctype.crm_booking_page.crm_booking_page import is_own_form
+
 		page = frappe.db.get_value("CRM Booking Page", {"web_form": form_name})
-		if page and frappe.has_permission("CRM Booking Page", "write", doc=page):
+		if (
+			page
+			and is_own_form(form_name, page)
+			and frappe.has_permission("CRM Booking Page", "write", doc=page)
+		):
 			return
 	elif booking_editors and frappe.has_permission("CRM Booking Page", "write"):
 		return

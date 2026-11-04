@@ -37,9 +37,15 @@ MAX_RANGE = timedelta(days=42)
 GOOGLE_BUSY_CACHE_SECONDS = 5 * 60
 # who the visitor is; left out of the answers shown in the meeting and emails
 CONTACT_FIELDS = {"first_name", "last_name", "lead_name", "email", "mobile_no", "phone"}
+# limits that keep a public page from being used to flood a calendar or someone's inbox
+MAX_UPCOMING_PER_EMAIL = 2  # per page
+MAX_BOOKINGS_PER_EMAIL_PER_DAY = 5  # across all pages
+MAX_BOOKINGS_PER_PAGE_PER_HOUR = 30
+HOST_LOCK_SECONDS = 30
 
 
 @frappe.whitelist(allow_guest=True)
+@rate_limit(limit=300, seconds=60 * 60)
 def get_slots(route: str, start: str, end: str, token: str | None = None) -> list[str]:
 	"""Open slot start times between `start` and `end`, as UTC ISO strings.
 
@@ -68,10 +74,11 @@ def book(
 	if not validate_email_address(email):
 		frappe.throw(_("Please enter a valid email address"))
 	doc_values["email"] = email
+	check_booking_limits(page, email)
 	full_name = (
 		" ".join(str(doc_values.get(f) or "") for f in ("first_name", "last_name")).strip()
 		or email.split("@")[0]
-	)
+	)[:140]
 	phone = doc_values.get("mobile_no") or doc_values.get("phone")
 
 	start_utc = parse_utc(start)
@@ -114,7 +121,6 @@ def make_booking(page, host, start_utc, guest, reference, answers=None, timezone
 	event = create_event(page, booking, values)
 	booking.db_set("event", event.name, update_modified=False)
 	send_booking_emails(page, booking, event, "confirmed")
-	share_record_with_host(booking)
 	notify_host(page, booking, "confirmed")
 	return booking
 
@@ -304,6 +310,37 @@ def ensure_upcoming(booking):
 		frappe.throw(_("This meeting has already started"))
 
 
+def check_booking_limits(page, email: str):
+	"""Stop one address or one page from filling calendars and sending mail in bulk."""
+	now = datetime.now(UTC)
+	upcoming = frappe.db.count(
+		"CRM Booking",
+		{
+			"booking_page": page.name,
+			"guest_email": email,
+			"status": "Confirmed",
+			"starts_on": [">", to_system(now)],
+		},
+	)
+	if upcoming >= MAX_UPCOMING_PER_EMAIL:
+		frappe.throw(_("You already have a meeting booked. Use the link in your email to change it."))
+	day_ago = to_system(now - timedelta(days=1))
+	if (
+		frappe.db.count("CRM Booking", {"guest_email": email, "creation": [">", day_ago]})
+		>= MAX_BOOKINGS_PER_EMAIL_PER_DAY
+	):
+		frappe.throw(_("Too many bookings from this email address today"), frappe.RateLimitExceededError)
+	hour_ago = to_system(now - timedelta(hours=1))
+	if (
+		frappe.db.count("CRM Booking", {"booking_page": page.name, "creation": [">", hour_ago]})
+		>= MAX_BOOKINGS_PER_PAGE_PER_HOUR
+	):
+		frappe.throw(
+			_("This page is getting a lot of bookings. Please try again later."),
+			frappe.RateLimitExceededError,
+		)
+
+
 def booking_form(page):
 	"""The page's own CRM web form."""
 	if not page.web_form:
@@ -332,6 +369,8 @@ def clean_form_values(page, values: dict) -> tuple[dict, dict]:
 			frappe.throw(_("Please fill in: {0}").format(f.label or f.fieldname))
 		if f.fieldtype == "Select" and value and value not in (f.options or "").split("\n"):
 			frappe.throw(_("Please pick an option for: {0}").format(f.label or f.fieldname))
+		if f.fieldtype == "Link" and value and value not in link_values(f.options):
+			frappe.throw(_("Please pick an option for: {0}").format(f.label or f.fieldname))
 		if value:
 			doc_values[f.fieldname] = value
 			if f.fieldname not in CONTACT_FIELDS:
@@ -339,12 +378,42 @@ def clean_form_values(page, values: dict) -> tuple[dict, dict]:
 	return doc_values, answers
 
 
+def link_values(doctype: str | None) -> set[str]:
+	"""The records a visitor can pick in a Link field, as the form shows them."""
+	from crm.www.crm_form import _link_field_options
+
+	return {o["value"] for o in _link_field_options(doctype)} if doctype else set()
+
+
 def lock_hosts(hosts: list[str]):
-	"""Serialise bookings per host so two visitors can't take the same slot."""
-	frappe.db.sql(
-		"select name from `tabUser` where name in %(hosts)s order by name for update",
-		{"hosts": tuple(hosts) or ("",)},
-	)
+	"""Serialise bookings per host so two visitors can't take the same slot.
+
+	A named lock in Redis, held until the booking commits or rolls back, so the
+	free/busy checks and Google calls inside it don't hold database row locks."""
+	locks = []
+	for host in sorted(set(hosts)):
+		lock = frappe.cache.lock(
+			frappe.cache.make_key(f"crm_booking_host:{host}"),
+			timeout=HOST_LOCK_SECONDS,
+			blocking_timeout=HOST_LOCK_SECONDS,
+		)
+		if not lock.acquire():
+			release_locks(locks)
+			frappe.throw(_("That time was just taken. Please pick another one."), exc=SlotUnavailableError)
+		locks.append(lock)
+	frappe.db.after_commit.add(lambda: release_locks(locks))
+	frappe.db.after_rollback.add(lambda: release_locks(locks))
+
+
+def release_locks(locks):
+	from redis.exceptions import LockError
+
+	for lock in locks:
+		try:
+			lock.release()
+		except LockError:
+			pass  # expired, or already released by the other of commit/rollback
+	locks.clear()
 
 
 def pick_host(page, free_hosts: list[str]) -> str:
@@ -367,8 +436,9 @@ def pick_host(page, free_hosts: list[str]) -> str:
 def link_record(page, email, host, values) -> tuple[str | None, str | None]:
 	"""The visitor's open lead or deal, or a new one of the page's type for the host.
 
-	Answers fill an existing record's empty fields only; a new record gets them all,
-	plus the form's hidden defaults, as if it came in through the form."""
+	An existing record is only linked, never changed: anyone can type any email, so the
+	answers stay on the booking. A new record gets them all, plus the form's hidden
+	defaults, as if it came in through the form."""
 	doctype = page.document_type or "CRM Lead"
 	lead = frappe.db.get_value("CRM Lead", {"email": email, "converted": 0}, "name", order_by="modified desc")
 	contact = frappe.db.get_value("Contact Email", {"email_id": email, "parenttype": "Contact"}, "parent")
@@ -380,8 +450,6 @@ def link_record(page, email, host, values) -> tuple[str | None, str | None]:
 		(("CRM Lead", lead), ("CRM Deal", deal)), key=lambda r: r[0] != doctype
 	):
 		if found:
-			if found_doctype == doctype:
-				fill_empty_fields(found_doctype, found, values)
 			return found_doctype, found
 
 	if not page.create_lead:
@@ -399,17 +467,6 @@ def link_record(page, email, host, values) -> tuple[str | None, str | None]:
 	finally:
 		frappe.flags.in_web_form, frappe.form_dict.web_form = flags
 	return doctype, doc.name
-
-
-def fill_empty_fields(doctype, name, values: dict):
-	doc = frappe.get_doc(doctype, name)
-	changed = False
-	for fieldname, value in values.items():
-		if doc.meta.has_field(fieldname) and not doc.get(fieldname):
-			doc.set(fieldname, value)
-			changed = True
-	if changed:
-		doc.save(ignore_permissions=True)
 
 
 # Slots
@@ -550,17 +607,28 @@ def occurrences(event, start, end):
 def google_busy_times(host, start_utc, end_utc) -> list[tuple[datetime, datetime]]:
 	"""Busy blocks from the host's Google Calendar, when they've connected one.
 
-	Asks Google for whole UTC days so nearby requests share a cache entry."""
+	Cached per UTC day, so however a visitor slices the range, Google is asked about
+	each day at most once every few minutes."""
 	calendar = frappe.db.get_value("Google Calendar", {"user": host, "enable": 1}, "name")
 	if not calendar:
 		return []
-	day_start = start_utc.replace(hour=0, minute=0, second=0, microsecond=0)
-	day_end = end_utc.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-	key = f"crm_booking_google_busy:{calendar}:{day_start.date()}:{day_end.date()}"
-	blocks = frappe.cache.get_value(key)
-	if blocks is None:
-		blocks = fetch_google_busy(calendar, day_start, day_end)
-		frappe.cache.set_value(key, blocks, expires_in_sec=GOOGLE_BUSY_CACHE_SECONDS)
+	first = start_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+	days = [first + timedelta(days=i) for i in range((end_utc - first).days + 1)]
+
+	def key(day):
+		return f"crm_booking_google_busy:{calendar}:{day.date()}"
+
+	cached = {day: frappe.cache.get_value(key(day)) for day in days}
+	missing = [day for day, blocks in cached.items() if blocks is None]
+	if missing:
+		fetched = fetch_google_busy(calendar, missing[0], missing[-1] + timedelta(days=1))
+		for day in missing:
+			# a block spanning midnight is kept on every day it touches
+			cached[day] = [
+				(s, e) for s, e in fetched if parse_utc(s) < day + timedelta(days=1) and parse_utc(e) > day
+			]
+			frappe.cache.set_value(key(day), cached[day], expires_in_sec=GOOGLE_BUSY_CACHE_SECONDS)
+	blocks = {block for day in days for block in cached[day]}
 	return [(parse_utc(s), parse_utc(e)) for s, e in blocks]
 
 
@@ -596,15 +664,24 @@ def fetch_google_busy(calendar, start_utc, end_utc) -> list[tuple[str, str]]:
 def event_title(page, booking, values: dict | None = None) -> str:
 	"""The page's meeting title with its placeholders filled in; unknown ones are left as typed."""
 	fields = {
-		**{k: str(v) for k, v in (values or {}).items()},
-		"guest": booking.guest_name,
+		**{k: plain(v) for k, v in (values or {}).items()},
+		"guest": plain(booking.guest_name),
 		"host": frappe.db.get_value("User", booking.host, "full_name") or booking.host,
 		"page": page.title,
 	}
 	template = (page.event_title or "").strip()
 	if not template:
-		return _("{0} with {1}").format(page.title, booking.guest_name)
+		return _("{0} with {1}").format(page.title, plain(booking.guest_name))
 	return re.sub(r"\{(\w+)\}", lambda m: fields.get(m.group(1), m.group(0)), template)[:140]
+
+
+def plain(value) -> str:
+	"""A visitor's text as it may appear in a meeting title, which Google sends out from
+	the host's account: one short line, no links."""
+	text = re.sub(r"\s+", " ", str(value or "")).strip()
+	text = re.sub(r"(?i)\b(?:https?://|www\.)\S*", "", text)
+	text = re.sub(r"(?i)\b[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:/\S*)?", "", text)
+	return re.sub(r"\s+", " ", text).strip()[:60]
 
 
 def create_event(page, booking, values: dict | None = None):
@@ -838,30 +915,6 @@ def record_owner(booking) -> str | None:
 	return frappe.db.get_value(booking.reference_doctype, booking.reference_docname, field)
 
 
-def share_record_with_host(booking):
-	"""Let the host open a lead or deal someone else owns, without taking it over.
-
-	Assigning would make the host the owner, since the latest assignee owns the record."""
-	if not booking.reference_docname or record_owner(booking) == booking.host:
-		return
-	if not frappe.db.exists(
-		"DocShare",
-		{
-			"user": booking.host,
-			"share_doctype": booking.reference_doctype,
-			"share_name": booking.reference_docname,
-		},
-	):
-		frappe.share.add_docshare(
-			booking.reference_doctype,
-			booking.reference_docname,
-			booking.host,
-			write=1,
-			flags={"ignore_share_permission": True},
-			notify=0,
-		)
-
-
 def format_short_when(booking, tz_name) -> str:
 	start = to_utc(booking.starts_on).astimezone(ZoneInfo(valid_timezone(tz_name) or get_system_timezone()))
 	return f"{start:%a %-d %b, %-I:%M %p}"
@@ -888,8 +941,17 @@ def ics(page, booking, host_name, host_email, link) -> str:
 
 	def text(value):
 		return (
-			(value or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+			(value or "")
+			.replace("\r", "")
+			.replace("\\", "\\\\")
+			.replace(";", "\\;")
+			.replace(",", "\\,")
+			.replace("\n", "\\n")
 		)
+
+	def name(value):
+		# a parameter value: quoted, so ; : , can't start a new parameter, and no quotes or line breaks inside
+		return '"' + re.sub(r'["\r\n]', "", value or "") + '"'
 
 	return "\r\n".join(
 		[
@@ -904,8 +966,8 @@ def ics(page, booking, host_name, host_email, link) -> str:
 			f"DTEND:{stamp(to_utc(booking.ends_on))}",
 			f"SUMMARY:{text(page.title + ' with ' + host_name)}",
 			f"LOCATION:{text(location_text(page, link))}",
-			f"ORGANIZER;CN={text(host_name)}:mailto:{host_email}",
-			f"ATTENDEE;CN={text(booking.guest_name)};RSVP=FALSE:mailto:{booking.guest_email}",
+			f"ORGANIZER;CN={name(host_name)}:mailto:{host_email}",
+			f"ATTENDEE;CN={name(booking.guest_name)};RSVP=FALSE:mailto:{booking.guest_email}",
 			"END:VEVENT",
 			"END:VCALENDAR",
 			"",
