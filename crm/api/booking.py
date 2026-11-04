@@ -827,6 +827,9 @@ def send_booking_emails(page, booking, event, action: str, to_host: bool = True)
 		reply_to=host_email,
 		subject=subjects[action].format(page.title) + f" · {guest_when}",
 		template="crm_booking",
+		# the card layout of Frappe's own account emails
+		with_container=True,
+		wrapper="templates/emails/auth_email.html",
 		args={
 			"action": action,
 			"title": page.title,
@@ -855,6 +858,9 @@ def send_booking_emails(page, booking, event, action: str, to_host: bool = True)
 		reply_to=booking.guest_email,
 		subject=subjects[action].format(f"{page.title} with {booking.guest_name}") + f" · {host_when}",
 		template="crm_booking",
+		# the card layout of Frappe's own account emails
+		with_container=True,
+		wrapper="templates/emails/auth_email.html",
 		args={
 			"action": action,
 			"title": page.title,
