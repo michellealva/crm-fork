@@ -310,6 +310,66 @@ class TestBooking(FrappeTestCase):
 		self.assertEqual(notifications[0].reference_name, booking.reference_docname)
 		self.assertIn("Vera Visitor booked Intro call", notifications[0].message)
 
+	def test_assignment_rule_leaves_a_booked_lead_with_its_host(self):
+		frappe.get_doc(
+			{
+				"doctype": "Assignment Rule",
+				"name": "Booking test round robin",
+				"document_type": "CRM Lead",
+				"rule": "Round Robin",
+				"assign_condition": "status != 'Junk'",
+				"priority": 1,
+				"users": [{"user": HOSTS[1]}],
+				"assignment_days": [
+					{"day": d}
+					for d in ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+				],
+			}
+		).insert(ignore_permissions=True)
+		# tearDown's rollback drops the rule, but not the cached list of rules for leads
+		self.addCleanup(frappe.cache_manager.clear_doctype_map, "Assignment Rule", "CRM Lead")
+
+		other = frappe.get_doc(
+			{"doctype": "CRM Lead", "first_name": "Ruled", "email": "ruled@example.com"}
+		).insert(ignore_permissions=True)
+		self.assertEqual(other.get_assigned_users(), {HOSTS[1]}, "the rule should be live")
+
+		result = self.book_as_guest(self.at(9))
+		lead = frappe.get_doc(
+			"CRM Lead", frappe.db.get_value("CRM Booking", {"token": result["token"]}, "reference_docname")
+		)
+		self.assertEqual(lead.lead_owner, HOSTS[0])
+		self.assertEqual(lead.get_assigned_users(), {HOSTS[0]})
+
+	def test_owner_keeps_an_existing_lead_and_hears_about_the_meeting(self):
+		lead = frappe.get_doc(
+			{
+				"doctype": "CRM Lead",
+				"first_name": "Known",
+				"email": "known@example.com",
+				"lead_owner": HOSTS[1],
+			}
+		).insert(ignore_permissions=True)
+		self.book_as_guest(self.at(9), email="known@example.com")
+
+		lead.reload()
+		self.assertEqual(lead.lead_owner, HOSTS[1])
+		self.assertTrue(
+			frappe.db.exists(
+				"DocShare", {"user": HOSTS[0], "share_doctype": "CRM Lead", "share_name": lead.name}
+			),
+			"the host can open the lead",
+		)
+		to_owner = frappe.get_all(
+			"CRM Notification", filters={"to_user": HOSTS[1], "type": "Booking"}, pluck="message"
+		)
+		self.assertEqual(len(to_owner), 1)
+		self.assertIn("Vera Visitor booked Intro call with", to_owner[0])
+		to_host = frappe.get_all(
+			"CRM Notification", filters={"to_user": HOSTS[0], "type": "Booking"}, pluck="message"
+		)
+		self.assertEqual(len(to_host), 1)
+
 	def test_deleting_a_page_without_bookings_removes_its_form(self):
 		from crm.api.booking import list_pages
 

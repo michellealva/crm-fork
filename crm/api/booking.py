@@ -114,6 +114,7 @@ def make_booking(page, host, start_utc, guest, reference, answers=None, timezone
 	event = create_event(page, booking, values)
 	booking.db_set("event", event.name, update_modified=False)
 	send_booking_emails(page, booking, event, "confirmed")
+	share_record_with_host(booking)
 	notify_host(page, booking, "confirmed")
 	return booking
 
@@ -789,11 +790,12 @@ def send_booking_emails(page, booking, event, action: str, to_host: bool = True)
 
 
 def notify_host(page, booking, action: str):
-	"""An in-app notification for the host, opening the lead or deal's events."""
+	"""An in-app notification for the host, opening the lead or deal's events.
+
+	When someone else owns the lead or deal, they hear about the meeting too."""
 	if not booking.reference_docname:
 		return
 	esc = frappe.utils.escape_html
-	host_tz = frappe.db.get_value("User", booking.host, "time_zone") or get_system_timezone()
 	guest = f'<span class="font-medium text-ink-gray-9">{esc(booking.guest_name)}</span>'
 	title = f'<span class="font-medium text-ink-gray-9">{esc(page.title)}</span>'
 	what = {
@@ -801,21 +803,63 @@ def notify_host(page, booking, action: str):
 		"rescheduled": _("{0} moved {1}"),
 		"cancelled": _("{0} cancelled {1}"),
 	}[action].format(guest, title)
+	add_booking_notification(booking, booking.host, what)
+
+	owner = record_owner(booking)
+	if owner and owner != booking.host:
+		host_name = frappe.utils.get_fullname(booking.host)
+		with_host = _("{0} with {1}").format(
+			what, f'<span class="font-medium text-ink-gray-9">{esc(host_name)}</span>'
+		)
+		add_booking_notification(booking, owner, with_host)
+
+
+def add_booking_notification(booking, user: str, what: str):
+	user_tz = frappe.db.get_value("User", user, "time_zone") or get_system_timezone()
 	frappe.get_doc(
 		{
 			"doctype": "CRM Notification",
 			"from_user": "Guest",
-			"to_user": booking.host,
+			"to_user": user,
 			"type": "Booking",
 			"message": frappe.utils.strip_html(what),
 			"notification_text": f'<div class="mb-2 leading-5 text-ink-gray-5">{what} · '
-			f"{esc(format_short_when(booking, host_tz))}</div>",
+			f"{frappe.utils.escape_html(format_short_when(booking, user_tz))}</div>",
 			"notification_type_doctype": "CRM Booking",
 			"notification_type_doc": booking.name,
 			"reference_doctype": booking.reference_doctype,
 			"reference_name": booking.reference_docname,
 		}
 	).insert(ignore_permissions=True)
+
+
+def record_owner(booking) -> str | None:
+	field = "lead_owner" if booking.reference_doctype == "CRM Lead" else "deal_owner"
+	return frappe.db.get_value(booking.reference_doctype, booking.reference_docname, field)
+
+
+def share_record_with_host(booking):
+	"""Let the host open a lead or deal someone else owns, without taking it over.
+
+	Assigning would make the host the owner, since the latest assignee owns the record."""
+	if not booking.reference_docname or record_owner(booking) == booking.host:
+		return
+	if not frappe.db.exists(
+		"DocShare",
+		{
+			"user": booking.host,
+			"share_doctype": booking.reference_doctype,
+			"share_name": booking.reference_docname,
+		},
+	):
+		frappe.share.add_docshare(
+			booking.reference_doctype,
+			booking.reference_docname,
+			booking.host,
+			write=1,
+			flags={"ignore_share_permission": True},
+			notify=0,
+		)
 
 
 def format_short_when(booking, tz_name) -> str:
