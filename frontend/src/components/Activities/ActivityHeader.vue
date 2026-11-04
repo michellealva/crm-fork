@@ -27,19 +27,16 @@
       variant="solid"
       :options="callActions"
     />
-    <div v-else-if="title == 'Events'" class="flex gap-2">
-      <Button
-        :label="__('Book a meeting')"
-        iconLeft="lucide-calendar-check"
-        @click="modalRef.showBookMeeting()"
-      />
-      <Button variant="solid" @click="modalRef.showEvent()">
-        <template #prefix>
-          <EventIcon class="h-4 w-4" />
-        </template>
-        <span>{{ __('Schedule an Event') }}</span>
-      </Button>
-    </div>
+    <Button
+      v-else-if="title == 'Events'"
+      variant="solid"
+      @click="modalRef.showEvent()"
+    >
+      <template #prefix>
+        <EventIcon class="h-4 w-4" />
+      </template>
+      <span>{{ __('Schedule an Event') }}</span>
+    </Button>
     <Button
       v-else-if="title == 'Notes'"
       variant="solid"
@@ -127,11 +124,6 @@ const defaultActions = computed(() => {
       icon: h(EventIcon, { class: 'h-4 w-4' }),
       label: __('Schedule an Event'),
       onClick: () => props.modalRef.showEvent(),
-    },
-    {
-      icon: 'lucide-calendar-check',
-      label: __('Book a meeting'),
-      onClick: () => props.modalRef.showBookMeeting(),
     },
     {
       icon: h(PhoneIcon, { class: 'h-4 w-4' }),
