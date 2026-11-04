@@ -33,6 +33,7 @@
   "lead_source",
   "event_title",
   "confirmation_message",
+  "guest_reminder",
   "allowed_embedding_domains"
  ],
  "fields": [
@@ -212,6 +213,13 @@
    "label": "Confirmation message"
   },
   {
+   "fieldname": "guest_reminder",
+   "fieldtype": "Select",
+   "label": "Remind guest",
+   "options": "No reminder\n1 hour before\n1 day before",
+   "default": "1 day before"
+  },
+  {
    "fieldname": "allowed_embedding_domains",
    "fieldtype": "Small Text",
    "label": "Allowed embedding domains",
@@ -220,7 +228,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-11-03 23:20:00.000000",
+ "modified": "2026-11-04 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "FCRM",
  "name": "CRM Booking Page",

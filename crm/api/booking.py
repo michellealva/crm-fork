@@ -35,6 +35,8 @@ WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", 
 # a visitor browses a month at a time; anything wider is not a calendar view
 MAX_RANGE = timedelta(days=42)
 GOOGLE_BUSY_CACHE_SECONDS = 5 * 60
+# CRM Booking Page.guest_reminder
+REMINDER_OFFSETS = {"1 hour before": timedelta(hours=1), "1 day before": timedelta(days=1)}
 # who the visitor is; left out of the answers shown in the meeting and emails
 CONTACT_FIELDS = {"first_name", "last_name", "lead_name", "email", "mobile_no", "phone"}
 # limits that keep a public page from being used to flood a calendar or someone's inbox
@@ -671,7 +673,7 @@ def event_title(page, booking, values: dict | None = None) -> str:
 	}
 	template = (page.event_title or "").strip()
 	if not template:
-		return _("{0} with {1}").format(page.title, plain(booking.guest_name))
+		return _("{0} ({1})").format(page.title, plain(booking.guest_name))
 	return re.sub(r"\{(\w+)\}", lambda m: fields.get(m.group(1), m.group(0)), template)[:140]
 
 
@@ -808,6 +810,7 @@ def send_booking_emails(page, booking, event, action: str, to_host: bool = True)
 		"confirmed": _("Confirmed: {0}"),
 		"rescheduled": _("Rescheduled: {0}"),
 		"cancelled": _("Cancelled: {0}"),
+		"reminder": _("Reminder: {0}"),
 	}
 	host_name, host_email, host_tz = frappe.db.get_value(
 		"User", booking.host, ["full_name", "email", "time_zone"]
@@ -815,7 +818,7 @@ def send_booking_emails(page, booking, event, action: str, to_host: bool = True)
 
 	guest_when = format_when(booking, booking.guest_timezone or page_timezone(page))
 	attachments = []
-	if action != "cancelled" and not invited_by_google:
+	if action in ("confirmed", "rescheduled") and not invited_by_google:
 		attachments.append(
 			{"fname": "invite.ics", "fcontent": ics(page, booking, host_name, host_email, link)}
 		)
@@ -856,14 +859,72 @@ def send_booking_emails(page, booking, event, action: str, to_host: bool = True)
 			"title": page.title,
 			"when": host_when,
 			"with_name": f"{booking.guest_name} ({booking.guest_email})",
+			"guest": booking.guest_name,
 			"location": location_text(page, link),
 			"answers": frappe.parse_json(booking.answers) or {},
 			"record_url": record_url,
 			"reason": booking.cancel_reason if action == "cancelled" else "",
+			"note": _(
+				"There's no Google Meet link because your Google Calendar isn't connected to the CRM. "
+				"Send {0} a link to join."
+			).format(booking.guest_name)
+			if action != "cancelled" and page.location_type == "Google Meet" and not link
+			else "",
 		},
 		reference_doctype="CRM Booking",
 		reference_name=booking.name,
 	)
+
+
+def reminder_already_due(booking) -> bool:
+	"""No reminder for a meeting booked or moved inside its reminder window:
+	the confirmation has only just gone out."""
+	offset = REMINDER_OFFSETS.get(
+		frappe.db.get_value("CRM Booking Page", booking.booking_page, "guest_reminder")
+	)
+	return not offset or to_utc(booking.starts_on) - offset <= datetime.now(UTC)
+
+
+def send_guest_reminders():
+	"""Email guests ahead of their meetings, as each page asks. Runs from the scheduler."""
+	now = datetime.now(UTC)
+	for option, offset in REMINDER_OFFSETS.items():
+		pages = frappe.get_all("CRM Booking Page", filters={"guest_reminder": option}, pluck="name")
+		due = pages and frappe.get_all(
+			"CRM Booking",
+			filters={
+				"booking_page": ["in", pages],
+				"status": "Confirmed",
+				"reminder_sent": 0,
+				"starts_on": ["between", [to_system(now), to_system(now + offset)]],
+			},
+			pluck="name",
+		)
+		for name in due or []:
+			booking = frappe.get_doc("CRM Booking", name)
+			booking.db_set("reminder_sent", 1, update_modified=False)
+			page = frappe.get_doc("CRM Booking Page", booking.booking_page)
+			event = (
+				frappe.get_doc("Event", booking.event)
+				if booking.event and frappe.db.exists("Event", booking.event)
+				else None
+			)
+			send_booking_emails(page, booking, event, "reminder", to_host=False)
+
+
+@frappe.whitelist()
+def hosts_without_google(users: list | str) -> list[str]:
+	"""Hosts whose meetings can't get a Google Meet link: their Google Calendar
+	isn't connected to the CRM with pushing on."""
+	users = frappe.parse_json(users) or []
+	connected = set(
+		frappe.get_all(
+			"Google Calendar",
+			filters={"user": ["in", users or [""]], "enable": 1, "push_to_google_calendar": 1},
+			pluck="user",
+		)
+	)
+	return [u for u in users if u not in connected]
 
 
 def notify_host(page, booking, action: str):

@@ -353,7 +353,10 @@ whatsapp_access_guard = ["crm.api.whatsapp.validate_access"]
 # ---------------
 
 scheduler_events = {
-	"all": ["crm.api.event.trigger_offset_event_notifications"],
+	"all": [
+		"crm.api.event.trigger_offset_event_notifications",
+		"crm.api.booking.send_guest_reminders",
+	],
 	"hourly": [
 		"crm.api.event.trigger_hourly_event_notifications",
 		"crm.automation.events.emit_overdue_tasks",

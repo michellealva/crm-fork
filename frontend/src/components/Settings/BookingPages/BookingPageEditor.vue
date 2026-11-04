@@ -120,12 +120,22 @@
                 />
                 <div
                   v-if="doc.location_type === 'Google Meet'"
-                  class="col-span-2 text-p-sm text-ink-gray-5"
+                  class="col-span-2 text-p-sm"
+                  :class="
+                    unconnectedHosts.length
+                      ? 'text-ink-amber-6'
+                      : 'text-ink-gray-5'
+                  "
                 >
                   {{
-                    __(
-                      'A Meet link is added when the host has connected Google Calendar.',
-                    )
+                    unconnectedHosts.length
+                      ? __(
+                          "Not connected to Google Calendar: {0}. Their meetings won't get a Meet link, so the CRM asks them to send one.",
+                          [unconnectedHosts.join(', ')],
+                        )
+                      : __(
+                          "Each meeting gets a Meet link from the host's Google Calendar.",
+                        )
                   }}
                 </div>
               </div>
@@ -435,7 +445,7 @@
                   :model-value="doc.event_title"
                   type="text"
                   :label="__('Meeting title')"
-                  :placeholder="__('{page} with {guest}')"
+                  :placeholder="__('{page} ({guest})')"
                   :description="
                     __(
                       'How the meeting is named on the calendar. Use {guest}, {host}, {page} or a form field like {organization_name}.',
@@ -455,6 +465,18 @@
                   @update:model-value="
                     (v: string) => set('confirmation_message', v)
                   "
+                />
+                <FormControl
+                  :model-value="doc.guest_reminder || 'No reminder'"
+                  type="select"
+                  :label="__('Remind guest')"
+                  :options="reminderOptions"
+                  :description="
+                    __(
+                      'An email before the meeting, with links to reschedule or cancel.',
+                    )
+                  "
+                  @update:model-value="(v: string) => set('guest_reminder', v)"
                 />
               </div>
             </section>
@@ -610,7 +632,15 @@ import {
   call,
   toast,
 } from 'frappe-ui'
-import { computed, defineComponent, h, onMounted, provide, ref } from 'vue'
+import {
+  computed,
+  defineComponent,
+  h,
+  onMounted,
+  provide,
+  ref,
+  watch,
+} from 'vue'
 import AssigneeSearch from '@/components/Settings/AssignmentRules/AssigneeSearch.vue'
 import FormBuilderPanel from '@/components/Settings/Forms/FormBuilderPanel.vue'
 import LucideCopy from '~icons/lucide/copy'
@@ -649,6 +679,7 @@ interface BookingPageDoc {
   create_lead: 0 | 1
   lead_source?: string
   confirmation_message?: string
+  guest_reminder?: string
   event_title?: string
   allowed_embedding_domains?: string
   hosts: Row[]
@@ -698,6 +729,31 @@ provide(
 )
 
 const doc = ref<BookingPageDoc | null>(null)
+
+const reminderOptions = [
+  { label: __('No reminder'), value: 'No reminder' },
+  { label: __('1 hour before'), value: '1 hour before' },
+  { label: __('1 day before'), value: '1 day before' },
+]
+
+// hosts whose meetings can't get a Google Meet link
+const unconnectedHosts = ref<string[]>([])
+watch(
+  () => [doc.value?.location_type, doc.value?.hosts?.map((h) => h.user).join()],
+  async ([locationType]) => {
+    const users = (doc.value?.hosts || []).map((h) => String(h.user))
+    if (locationType !== 'Google Meet' || !users.length) {
+      unconnectedHosts.value = []
+      return
+    }
+    const missing: string[] = await call(
+      'crm.api.booking.hosts_without_google',
+      { users },
+    ).catch(() => [])
+    unconnectedHosts.value = missing.map((u) => getUser(u)?.full_name || u)
+  },
+  { immediate: true },
+)
 const dirty = ref(false)
 const saving = ref(false)
 const error = ref('')

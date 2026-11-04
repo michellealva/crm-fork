@@ -1,6 +1,11 @@
 <p>
-	{% if action == "confirmed" %}{{ _("Your meeting is booked.") }}
+	{% if guest %}
+	{% if action == "confirmed" %}{{ _("{0} booked a meeting with you.").format(guest)|e }}
+	{% elif action == "rescheduled" %}{{ _("{0} moved your meeting to a new time.").format(guest)|e }}
+	{% else %}{{ _("{0} cancelled your meeting.").format(guest)|e }}{% endif %}
+	{% elif action == "confirmed" %}{{ _("Your meeting is booked.") }}
 	{% elif action == "rescheduled" %}{{ _("Your meeting has moved to a new time.") }}
+	{% elif action == "reminder" %}{{ _("A reminder that your meeting is coming up.") }}
 	{% else %}{{ _("This meeting was cancelled.") }}{% endif %}
 </p>
 <p>
@@ -9,6 +14,7 @@
 	{{ _("With") }} {{ with_name|e }}<br />
 	{% if location %}{{ location|e }}{% endif %}
 </p>
+{% if note %}<p><strong>{{ note|e }}</strong></p>{% endif %}
 {% if reason %}<p>{{ _("Reason") }}: {{ reason|e }}</p>{% endif %}
 {% if message %}<p>{{ message|e }}</p>{% endif %}
 {% if answers %}

@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -572,9 +573,7 @@ class TestBooking(FrappeTestCase):
 
 	def test_meeting_title_can_be_configured(self):
 		booking = self.booking_for(self.book_as_guest(self.at(9)))
-		self.assertEqual(
-			frappe.db.get_value("Event", booking.event, "subject"), "Intro call with Vera Visitor"
-		)
+		self.assertEqual(frappe.db.get_value("Event", booking.event, "subject"), "Intro call (Vera Visitor)")
 
 		self.page.event_title = "Demo · {guest} · {page} · {unknown}"
 		self.page.save()
@@ -595,3 +594,110 @@ class TestBooking(FrappeTestCase):
 
 		cancel_booking(booking.token)
 		self.assertIsNone(get_event(booking.event)["booking_guest"])
+
+	def connect_google(self, user):
+		# skips Google Settings validation; nothing here talks to Google
+		frappe.get_doc(
+			{
+				"doctype": "Google Calendar",
+				"calendar_name": user,
+				"user": user,
+				"enable": 1,
+				"pull_from_google_calendar": 1,
+				"push_to_google_calendar": 1,
+			}
+		).db_insert()
+
+	def test_guests_get_a_reminder_ahead_of_the_meeting(self):
+		from crm.api.booking import send_guest_reminders
+
+		self.page.guest_reminder = "1 day before"
+		self.page.save()
+		booking = self.booking_for(self.book_as_guest(self.at(9)))
+		self.assertEqual(booking.reminder_sent, 0)
+
+		# not yet: the meeting is more than a day away
+		send_guest_reminders()
+		self.assertEqual(frappe.db.get_value("CRM Booking", booking.name, "reminder_sent"), 0)
+
+		# a day out, it goes once, to the guest only
+		booking.db_set("starts_on", to_system(datetime.now(UTC) + timedelta(hours=20)))
+		with patch("crm.api.booking.frappe.sendmail") as sendmail:
+			send_guest_reminders()
+			send_guest_reminders()
+		self.assertEqual(frappe.db.get_value("CRM Booking", booking.name, "reminder_sent"), 1)
+		self.assertEqual(len(sendmail.call_args_list), 1)
+		sent = sendmail.call_args.kwargs
+		self.assertEqual(sent["recipients"], ["visitor@example.com"])
+		self.assertTrue(sent["subject"].startswith("Reminder: Intro call"))
+		self.assertEqual(sent["args"]["action"], "reminder")
+
+	def test_moving_a_meeting_sets_up_a_new_reminder(self):
+		self.page.guest_reminder = "1 hour before"
+		self.page.save()
+		booking = self.booking_for(self.book_as_guest(self.at(9)))
+		booking.db_set("reminder_sent", 1)
+		reschedule_booking(booking.token, to_iso(self.at(10)))
+		self.assertEqual(frappe.db.get_value("CRM Booking", booking.name, "reminder_sent"), 0)
+
+	def test_no_reminder_when_booked_inside_the_window_or_turned_off(self):
+		self.page.guest_reminder = "1 day before"
+		self.page.save()
+		soon = self.make_page([HOSTS[1]], guest_reminder="1 day before", min_notice=0)
+		booking = frappe.get_doc(
+			{
+				"doctype": "CRM Booking",
+				"booking_page": soon.name,
+				"host": HOSTS[1],
+				"starts_on": to_system(datetime.now(UTC) + timedelta(hours=3)),
+				"ends_on": to_system(datetime.now(UTC) + timedelta(hours=3, minutes=30)),
+				"guest_name": "Soon",
+				"guest_email": "soon@example.com",
+				"token": frappe.generate_hash(),
+			}
+		).insert(ignore_permissions=True)
+		self.assertEqual(booking.reminder_sent, 1)
+
+		off = self.make_page([HOSTS[1]], guest_reminder="No reminder")
+		booking = self.booking_for(self.book_as_guest(self.at(11), "off@example.com", off))
+		self.assertEqual(booking.reminder_sent, 1)
+
+	def test_google_busy_times_block_slots(self):
+		self.connect_google(HOSTS[0])
+		busy = [(to_iso(self.at(10)), to_iso(self.at(11)))]
+		with patch("crm.api.booking.fetch_google_busy", return_value=busy):
+			frappe.cache.delete_keys("crm_booking_google_busy")
+			slots = self.slots_on_monday()
+		self.assertIn(to_iso(self.at(9, 30)), slots)
+		self.assertNotIn(to_iso(self.at(10)), slots)
+		self.assertNotIn(to_iso(self.at(10, 30)), slots)
+		self.assertIn(to_iso(self.at(11)), slots)
+
+	def test_a_booking_survives_google_being_unreachable(self):
+		from crm.api.booking import hosts_without_google
+
+		self.page.location_type = "Google Meet"
+		self.page.save()
+		self.assertEqual(hosts_without_google([HOSTS[0]]), [HOSTS[0]])
+		self.connect_google(HOSTS[0])
+		self.assertEqual(hosts_without_google([HOSTS[0]]), [])
+
+		def google_down(doc, method=None):
+			if doc.sync_with_google_calendar:
+				raise ConnectionError("Google is down")
+
+		with (
+			patch("crm.api.booking.fetch_google_busy", return_value=[]),
+			patch(
+				"frappe.integrations.doctype.google_calendar.google_calendar.insert_event_in_google_calendar",
+				google_down,
+			),
+			patch("crm.api.booking.frappe.sendmail") as sendmail,
+		):
+			booking = self.booking_for(self.book_as_guest(self.at(9)))
+		event = frappe.get_doc("Event", booking.event)
+		self.assertEqual(event.owner, HOSTS[0])
+		self.assertFalse(event.sync_with_google_calendar)
+		# no Meet link, so the host is told to send one
+		host_mail = next(c.kwargs for c in sendmail.call_args_list if c.kwargs["recipients"] == [HOSTS[0]])
+		self.assertIn("Send Vera Visitor a link to join", host_mail["args"]["note"])

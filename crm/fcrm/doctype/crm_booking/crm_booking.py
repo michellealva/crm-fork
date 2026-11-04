@@ -11,7 +11,12 @@ from crm.permissions.org_hierarchy import (
 
 
 class CRMBooking(Document):
-	pass
+	def validate(self):
+		if self.is_new() or self.has_value_changed("starts_on"):
+			from crm.api.booking import reminder_already_due
+
+			# a new time gets its own reminder, unless it's already too close
+			self.reminder_sent = int(reminder_already_due(self))
 
 
 def sees_all_bookings(user: str) -> bool:
