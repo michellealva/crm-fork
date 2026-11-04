@@ -331,7 +331,7 @@ onMounted(() => {
       toTime: end.format('HH:mm'),
       isFullDay: props.event.all_day,
       eventType: props.event.event_type,
-      location: props.event.location || '',
+      location: props.event.location || props.event.google_meet_link || '',
       color: props.event.color,
       referenceDoctype: props.event.reference_doctype,
       referenceDocname: props.event.reference_docname,

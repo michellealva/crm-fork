@@ -724,5 +724,8 @@ class TestBooking(FrappeTestCase):
 		).db_insert()
 		self.connect_google(HOSTS[0])
 		self.assertEqual(google_status(HOSTS)["unconnected"], [HOSTS[1]])
+		# Google's own callback stores the token on the record, not encrypted
+		frappe.db.set_value("Google Calendar", "half", "refresh_token", "from-google")
+		self.assertEqual(google_status(HOSTS)["unconnected"], [])
 		frappe.set_user(HOSTS[0])
 		self.assertEqual(google_status([HOSTS[0]])["my_calendar"], HOSTS[0])

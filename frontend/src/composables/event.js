@@ -46,6 +46,7 @@ export function useEvent({
       'all_day',
       'event_type',
       'location',
+      'google_meet_link',
       'color',
       'attending',
       'owner',
@@ -275,7 +276,8 @@ export function parseEventDoc(doc) {
     toTime: dayjs(doc.ends_on).format('HH:mm'),
     isFullDay: doc.all_day,
     eventType: doc.event_type,
-    location: doc.location || '',
+    // a meeting synced to Google keeps its Meet link apart from the location
+    location: doc.location || doc.google_meet_link || '',
     color: doc.color,
     attending: doc.attending,
     referenceDoctype: doc.reference_doctype,

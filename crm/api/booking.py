@@ -832,9 +832,9 @@ def send_booking_emails(page, booking, event, action: str, to_host: bool = True)
 		reply_to=host_email,
 		subject=subjects[action].format(page.title) + f" · {guest_when}",
 		template="crm_booking",
-		# the card layout of Frappe's own account emails
+		# Frappe's card layout, with the business's own brand
 		with_container=True,
-		wrapper="templates/emails/auth_email.html",
+		wrapper="crm/templates/emails/crm_booking_wrapper.html",
 		args={
 			"action": action,
 			"title": page.title,
@@ -863,9 +863,9 @@ def send_booking_emails(page, booking, event, action: str, to_host: bool = True)
 		reply_to=booking.guest_email,
 		subject=subjects[action].format(f"{page.title} with {booking.guest_name}") + f" · {host_when}",
 		template="crm_booking",
-		# the card layout of Frappe's own account emails
+		# Frappe's card layout, with the business's own brand
 		with_container=True,
-		wrapper="templates/emails/auth_email.html",
+		wrapper="crm/templates/emails/crm_booking_wrapper.html",
 		args={
 			"action": action,
 			"title": page.title,
@@ -929,18 +929,17 @@ def send_guest_reminders():
 def hosts_without_google(users: list | str) -> list[str]:
 	"""Hosts whose Google Calendar isn't connected to the CRM (enabled, pushing, and
 	authorized), so Google can't block their slots or give their meetings a Meet link."""
-	from frappe.utils.password import get_decrypted_password
-
 	users = frappe.parse_json(users) or []
 	calendars = frappe.get_all(
 		"Google Calendar",
 		filters={"user": ["in", users or [""]], "enable": 1, "push_to_google_calendar": 1},
 		fields=["name", "user"],
 	)
+	# Google's callback saves the token on the record itself, so ask the document
 	connected = {
 		c.user
 		for c in calendars
-		if get_decrypted_password("Google Calendar", c.name, "refresh_token", raise_exception=False)
+		if frappe.get_doc("Google Calendar", c.name).get_password("refresh_token", raise_exception=False)
 	}
 	return [u for u in users if u not in connected]
 
