@@ -607,6 +607,9 @@ class TestBooking(FrappeTestCase):
 				"push_to_google_calendar": 1,
 			}
 		).db_insert()
+		from frappe.utils.password import set_encrypted_password
+
+		set_encrypted_password("Google Calendar", user, "refresh-token", "refresh_token")
 
 	def test_guests_get_a_reminder_ahead_of_the_meeting(self):
 		from crm.api.booking import send_guest_reminders
@@ -701,3 +704,25 @@ class TestBooking(FrappeTestCase):
 		# no Meet link, so the host is told to send one
 		host_mail = next(c.kwargs for c in sendmail.call_args_list if c.kwargs["recipients"] == [HOSTS[0]])
 		self.assertIn("Send Vera Visitor a link to join", host_mail["args"]["note"])
+
+	def test_google_status_for_page_settings(self):
+		from crm.api.booking import google_status
+
+		frappe.db.set_single_value("Google Settings", "enable", 0)
+		self.assertEqual(google_status([HOSTS[0]])["configured"], False)
+		frappe.db.set_single_value("Google Settings", "enable", 1)
+		self.assertEqual(google_status(HOSTS)["unconnected"], HOSTS)
+		# a calendar that was never authorized doesn't count
+		frappe.get_doc(
+			{
+				"doctype": "Google Calendar",
+				"calendar_name": "half",
+				"user": HOSTS[1],
+				"enable": 1,
+				"push_to_google_calendar": 1,
+			}
+		).db_insert()
+		self.connect_google(HOSTS[0])
+		self.assertEqual(google_status(HOSTS)["unconnected"], [HOSTS[1]])
+		frappe.set_user(HOSTS[0])
+		self.assertEqual(google_status([HOSTS[0]])["my_calendar"], HOSTS[0])

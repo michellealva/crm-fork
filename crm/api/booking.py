@@ -922,17 +922,36 @@ def send_guest_reminders():
 
 @frappe.whitelist()
 def hosts_without_google(users: list | str) -> list[str]:
-	"""Hosts whose meetings can't get a Google Meet link: their Google Calendar
-	isn't connected to the CRM with pushing on."""
+	"""Hosts whose Google Calendar isn't connected to the CRM (enabled, pushing, and
+	authorized), so Google can't block their slots or give their meetings a Meet link."""
+	from frappe.utils.password import get_decrypted_password
+
 	users = frappe.parse_json(users) or []
-	connected = set(
-		frappe.get_all(
-			"Google Calendar",
-			filters={"user": ["in", users or [""]], "enable": 1, "push_to_google_calendar": 1},
-			pluck="user",
-		)
+	calendars = frappe.get_all(
+		"Google Calendar",
+		filters={"user": ["in", users or [""]], "enable": 1, "push_to_google_calendar": 1},
+		fields=["name", "user"],
 	)
+	connected = {
+		c.user
+		for c in calendars
+		if get_decrypted_password("Google Calendar", c.name, "refresh_token", raise_exception=False)
+	}
 	return [u for u in users if u not in connected]
+
+
+@frappe.whitelist()
+def google_status(users: list | str) -> dict:
+	"""For a page's settings: whether Google is set up on the site, which hosts haven't
+	connected their calendar, and the current user's own Google Calendar record."""
+	users = frappe.parse_json(users) or []
+	configured = bool(frappe.db.get_single_value("Google Settings", "enable"))
+	return {
+		"configured": configured,
+		"can_set_up": "System Manager" in frappe.get_roles(),
+		"unconnected": hosts_without_google(users) if configured else users,
+		"my_calendar": frappe.db.get_value("Google Calendar", {"user": frappe.session.user}, "name"),
+	}
 
 
 def notify_host(page, booking, action: str):

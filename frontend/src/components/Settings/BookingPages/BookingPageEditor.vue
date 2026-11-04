@@ -120,22 +120,12 @@
                 />
                 <div
                   v-if="doc.location_type === 'Google Meet'"
-                  class="col-span-2 text-p-sm"
-                  :class="
-                    unconnectedHosts.length
-                      ? 'text-ink-amber-6'
-                      : 'text-ink-gray-5'
-                  "
+                  class="col-span-2 text-p-sm text-ink-gray-5"
                 >
                   {{
-                    unconnectedHosts.length
-                      ? __(
-                          "Not connected to Google Calendar: {0}. Their meetings won't get a Meet link, so the CRM asks them to send one.",
-                          [unconnectedHosts.join(', ')],
-                        )
-                      : __(
-                          "Each meeting gets a Meet link from the host's Google Calendar.",
-                        )
+                    __(
+                      "Meet links come from each host's Google Calendar. A host without one is asked to send the guest a link.",
+                    )
                   }}
                 </div>
               </div>
@@ -187,6 +177,35 @@
                 class="mt-2"
                 :message="__('Add at least one host')"
               />
+              <!-- Google Calendar: the CRM has no connect screen yet, so point to the desk -->
+              <div
+                v-if="googleNote"
+                class="mt-4 flex items-start justify-between gap-4 rounded-6 border border-outline-gray-2 p-3"
+              >
+                <div class="flex gap-2.5">
+                  <LucideCalendarSync
+                    class="mt-0.5 size-4 shrink-0 text-ink-gray-5"
+                  />
+                  <div class="flex flex-col gap-1 text-p-sm text-ink-gray-6">
+                    <span>{{ googleNote }}</span>
+                    <span v-if="othersUnconnected.length">
+                      {{
+                        __(
+                          'Not connected yet: {0}. Each host connects their own.',
+                          [othersUnconnected.join(', ')],
+                        )
+                      }}
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  v-if="googleAction"
+                  class="shrink-0"
+                  :label="googleAction.label"
+                  :href="googleAction.href"
+                  iconRight="lucide-external-link"
+                />
+              </div>
             </section>
 
             <!-- Weekly hours -->
@@ -636,6 +655,7 @@ import {
   computed,
   defineComponent,
   h,
+  onBeforeUnmount,
   onMounted,
   provide,
   ref,
@@ -643,6 +663,7 @@ import {
 } from 'vue'
 import AssigneeSearch from '@/components/Settings/AssignmentRules/AssigneeSearch.vue'
 import FormBuilderPanel from '@/components/Settings/Forms/FormBuilderPanel.vue'
+import LucideCalendarSync from '~icons/lucide/calendar-sync'
 import LucideCopy from '~icons/lucide/copy'
 import LucideExternalLink from '~icons/lucide/external-link'
 import LucideEye from '~icons/lucide/eye'
@@ -736,24 +757,80 @@ const reminderOptions = [
   { label: __('1 day before'), value: '1 day before' },
 ]
 
-// hosts whose meetings can't get a Google Meet link
-const unconnectedHosts = ref<string[]>([])
-watch(
-  () => [doc.value?.location_type, doc.value?.hosts?.map((h) => h.user).join()],
-  async ([locationType]) => {
-    const users = (doc.value?.hosts || []).map((h) => String(h.user))
-    if (locationType !== 'Google Meet' || !users.length) {
-      unconnectedHosts.value = []
-      return
-    }
-    const missing: string[] = await call(
-      'crm.api.booking.hosts_without_google',
-      { users },
-    ).catch(() => [])
-    unconnectedHosts.value = missing.map((u) => getUser(u)?.full_name || u)
-  },
-  { immediate: true },
+// Google Calendar for this page's hosts: who hasn't connected, and where to do it
+interface GoogleStatus {
+  configured: boolean
+  can_set_up: boolean
+  unconnected: string[]
+  my_calendar: string | null
+}
+const google = ref<GoogleStatus | null>(null)
+const me = getUser().name
+
+async function loadGoogleStatus() {
+  const users = (doc.value?.hosts || []).map((h) => String(h.user))
+  google.value = users.length
+    ? await call('crm.api.booking.google_status', { users }).catch(() => null)
+    : null
+}
+watch(() => doc.value?.hosts?.map((h) => h.user).join(), loadGoogleStatus, {
+  immediate: true,
+})
+// back from connecting in the desk tab
+onMounted(() => window.addEventListener('focus', loadGoogleStatus))
+onBeforeUnmount(() => window.removeEventListener('focus', loadGoogleStatus))
+
+const iNeedGoogle = computed(
+  () => !!google.value?.configured && google.value.unconnected.includes(me),
 )
+const othersUnconnected = computed(() =>
+  google.value?.configured
+    ? google.value.unconnected
+        .filter((u) => u !== me)
+        .map((u) => getUser(u)?.full_name || u)
+    : [],
+)
+const googleNote = computed(() => {
+  if (!google.value) return ''
+  if (!google.value.configured) {
+    return google.value.can_set_up
+      ? __(
+          "Google isn't set up on this site. Set it up so hosts can connect Google Calendar: their Google meetings then block booked times, and bookings get Meet links.",
+        )
+      : ''
+  }
+  if (iNeedGoogle.value) {
+    return __(
+      'Connect your Google Calendar so your Google meetings block booked times and bookings get Meet links.',
+    )
+  }
+  return othersUnconnected.value.length
+    ? __(
+        "Hosts with Google Calendar connected don't get booked over their Google meetings, and their bookings get Meet links.",
+      )
+    : ''
+})
+const googleAction = computed(() => {
+  if (!google.value) return null
+  if (!google.value.configured) {
+    return google.value.can_set_up
+      ? { label: __('Set up Google'), href: '/app/google-settings' }
+      : null
+  }
+  if (!iNeedGoogle.value) return null
+  const href = google.value.my_calendar
+    ? `/app/google-calendar/${encodeURIComponent(google.value.my_calendar)}`
+    : '/app/google-calendar/new?' +
+      new URLSearchParams({
+        user: me,
+        calendar_name: getUser().full_name || me,
+        enable: '1',
+        pull_from_google_calendar: '1',
+        push_to_google_calendar: '1',
+      })
+  return { label: __('Connect Google Calendar'), href }
+})
+
 const dirty = ref(false)
 const saving = ref(false)
 const error = ref('')
