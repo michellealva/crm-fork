@@ -186,7 +186,7 @@ def reschedule_booking(token: str, start: str) -> dict:
 def list_pages() -> list[dict]:
 	pages = frappe.get_list(
 		"CRM Booking Page",
-		fields=["name", "title", "route", "enabled", "duration", "location_type"],
+		fields=["name", "title", "route", "enabled", "duration", "location_type", "document_type"],
 		order_by="creation desc",
 	)
 	hosts = frappe.get_all(

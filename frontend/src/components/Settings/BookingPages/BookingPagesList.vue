@@ -55,8 +55,11 @@
                 {{ page.title }}
               </div>
               <div class="mt-0.5 truncate text-p-base text-ink-gray-5">
-                {{ __('{0} min', [page.duration]) }} · {{ ROUTE_PREFIX
-                }}{{ page.route }}
+                {{ __('{0} min', [page.duration]) }} ·
+                {{
+                  page.document_type === 'CRM Deal' ? __('Deal') : __('Lead')
+                }}
+                · {{ ROUTE_PREFIX }}{{ page.route }}
               </div>
             </div>
             <div class="w-3/12 cursor-pointer" @click="emit('open', page.name)">
@@ -161,6 +164,7 @@ interface BookingPageRow {
   route: string
   enabled: 0 | 1
   duration: number
+  document_type?: 'CRM Lead' | 'CRM Deal'
   hosts: string[]
   bookings: number
 }

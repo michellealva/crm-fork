@@ -109,6 +109,15 @@
                   "
                   @update:model-value="(v: string) => set('location', v)"
                 />
+                <FormControl
+                  :model-value="
+                    doc.document_type === 'CRM Deal' ? __('Deal') : __('Lead')
+                  "
+                  type="text"
+                  :label="__('Each booking creates a')"
+                  :description="__('Set when the page was created')"
+                  disabled
+                />
                 <div
                   v-if="doc.location_type === 'Google Meet'"
                   class="col-span-2 text-p-sm text-ink-gray-5"
