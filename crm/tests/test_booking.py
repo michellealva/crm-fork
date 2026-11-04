@@ -433,3 +433,15 @@ class TestBooking(FrappeTestCase):
 			frappe.db.get_value("Event", booking.event, "subject"),
 			"Demo · Vera Visitor · Intro call · {unknown}",
 		)
+
+	def test_booked_meetings_carry_the_guest_so_the_crm_can_warn_before_emailing(self):
+		from crm.api.event import get_event, get_event_list
+
+		booking = self.booking_for(self.book_as_guest(self.at(9)))
+		other = self.add_event(HOSTS[0], self.at(11), self.at(11, 30))
+		guests = {e.name: e.booking_guest for e in get_event_list("Event", ["name"], {"owner": HOSTS[0]})}
+		self.assertEqual(guests, {booking.event: "visitor@example.com", other.name: None})
+		self.assertEqual(get_event(booking.event)["booking_guest"], "visitor@example.com")
+
+		cancel_booking(booking.token)
+		self.assertIsNone(get_event(booking.event)["booking_guest"])

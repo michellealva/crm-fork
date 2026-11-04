@@ -193,7 +193,13 @@ import {
 import { onMounted, ref, computed, provide, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { activeSettingsPage, showSettings } from '@/composables/settings'
-import { EVENT_LIST_URL } from '@/composables/event'
+import {
+  EVENT_LIST_URL,
+  bookingOf,
+  confirmBookingMove,
+  deleteEventMessage,
+  movesBooking,
+} from '@/composables/event'
 
 const { user } = sessionStore()
 
@@ -288,6 +294,7 @@ const events = createListResource({
         attending: ev.attending,
         referenceDoctype: ev.reference_doctype,
         referenceDocname: ev.reference_docname,
+        booking: bookingOf(ev),
       }))
       .filter(
         (ev, index, self) => index === self.findIndex((e) => e.id === ev.id),
@@ -398,19 +405,27 @@ async function updateEvent(_event, afterDrag = false) {
       )
     }
 
-    events.setValue.submit(
-      { name: _event.id, ...buildEventPayload(_event) },
-      {
-        onSuccess: async (e) => {
-          await events.reload()
-          if (showEventPanel.value) showDetails({ id: e.name }, true)
+    const submit = () =>
+      events.setValue.submit(
+        { name: _event.id, ...buildEventPayload(_event) },
+        {
+          onSuccess: async (e) => {
+            await events.reload()
+            if (showEventPanel.value) showDetails({ id: e.name }, true)
+          },
+          onError: (err) => {
+            toast.error(err.messages[0])
+            console.error('Failed updating event', err)
+          },
         },
-        onError: (err) => {
-          toast.error(err.messages[0])
-          console.error('Failed updating event', err)
-        },
-      },
-    )
+      )
+    const booking = bookingFor(_event.id)
+    if (movesBooking(booking, _event)) {
+      // not moving it after all: put it back where it was
+      confirmBookingMove(booking, submit, () => events.reload())
+    } else {
+      submit()
+    }
   } else {
     event.value = { ..._event }
   }
@@ -421,7 +436,7 @@ function deleteEvent(eventID) {
 
   $dialog({
     title: __('Delete'),
-    message: __('Are you sure you want to delete this event?'),
+    message: deleteEventMessage(bookingFor(eventID)),
     actions: [
       {
         label: __('Delete'),
@@ -447,6 +462,10 @@ function deleteEvent(eventID) {
       },
     ],
   })
+}
+
+function bookingFor(eventID) {
+  return events.data?.find((e) => e.id === eventID)?.booking || null
 }
 
 function syncEvent(eventID, _event) {

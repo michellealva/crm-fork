@@ -904,6 +904,18 @@
         refreshDeps();
         setMonthFromToday();
 
+        // embedded: tell the host page how tall the card is, so the embed
+        // snippet can size the iframe to fit instead of scrolling inside it
+        if (document.body.classList.contains("embed") && window.parent !== window) {
+          const card = $("card");
+          const report = () =>
+            window.parent.postMessage(
+              { type: "crm-book:height", route: PAGE.route, height: Math.ceil(card.getBoundingClientRect().height) },
+              "*"
+            );
+          new ResizeObserver(report).observe(card);
+        }
+
         const token = params.get("booking");
         if (token) {
           api("get_booking", { token })

@@ -505,7 +505,7 @@ def get_event_list(
 		start=limit_start,
 	)
 	if doctype == "Event":
-		return [row for row in rows if can_see_event(row)]
+		return add_booking_guests([row for row in rows if can_see_event(row)])
 
 	# participants and notifications follow the events they belong to
 	parents = {row.get("parent") for row in rows}
@@ -524,4 +524,21 @@ def get_event(name: str) -> dict:
 	row = frappe.db.get_value("Event", name, ["name", "reference_doctype", "reference_docname"], as_dict=True)
 	if not row or not can_see_event(row):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
-	return frappe.get_doc("Event", name).as_dict()
+	return add_booking_guests([frappe.get_doc("Event", name).as_dict()])[0]
+
+
+def add_booking_guests(rows: list[dict]) -> list[dict]:
+	"""Mark meetings booked from a booking page with the guest's email: moving or
+	deleting one emails them, so the CRM asks first."""
+	names = [row.get("name") for row in rows if row.get("name")]
+	guests = dict(
+		frappe.get_all(
+			"CRM Booking",
+			filters={"event": ["in", names or [""]], "status": "Confirmed"},
+			fields=["event", "guest_email"],
+			as_list=True,
+		)
+	)
+	for row in rows:
+		row["booking_guest"] = guests.get(row.get("name"))
+	return rows

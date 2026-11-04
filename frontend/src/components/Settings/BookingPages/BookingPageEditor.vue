@@ -510,7 +510,7 @@
               <div class="relative mt-3.5">
                 <textarea
                   readonly
-                  rows="3"
+                  rows="8"
                   class="w-full resize-none rounded-5 border border-outline-gray-2 bg-surface-gray-1 py-2 pl-3 pr-10 font-mono text-xs text-ink-gray-7 focus:border-outline-gray-4 focus:outline-none focus:ring-0 focus-visible:outline-none"
                   :value="iframeSnippet"
                 />
@@ -949,10 +949,22 @@ const EMBEDDING_DOMAIN_RE =
 const invalidEmbeddingDomains = computed(() =>
   embeddingDomains.value.filter((d) => !EMBEDDING_DOMAIN_RE.test(d)),
 )
-const iframeSnippet = computed(
-  () =>
-    `<iframe src="${publicUrl.value}?embed=1" width="100%" height="720" style="border:0" title="${doc.value?.title || 'Book a meeting'}"></iframe>`,
-)
+// the script grows or shrinks the iframe to fit each step, so it never scrolls inside
+const iframeSnippet = computed(() => {
+  if (!doc.value) return ''
+  const route = doc.value.route
+  const id = `crm-book-${route}`
+  const origin = new URL(publicUrl.value).origin
+  return [
+    `<iframe id="${id}" src="${publicUrl.value}?embed=1" width="100%" height="720" style="border:0" title="${doc.value?.title || 'Book a meeting'}"></iframe>`,
+    '<script>',
+    '  addEventListener("message", (e) => {',
+    `    if (e.origin === "${origin}" && e.data?.type === "crm-book:height" && e.data.route === "${route}")`,
+    `      document.getElementById("${id}").style.height = e.data.height + "px";`,
+    '  });',
+    '</' + 'script>',
+  ].join('\n')
+})
 
 function openPage() {
   if (doc.value) window.open(pageUrl(doc.value.route), '_blank')

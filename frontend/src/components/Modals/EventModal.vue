@@ -247,6 +247,10 @@ import {
   buildEndTimeOptions,
   computeAutoToTime,
   validateTimeRange,
+  bookingOf,
+  confirmBookingMove,
+  deleteEventMessage,
+  movesBooking,
 } from '@/composables/event'
 import { CalendarColorMap as colorMap } from 'frappe-ui/experimental'
 import { onMounted, ref, computed, h } from 'vue'
@@ -389,7 +393,12 @@ function update() {
   }
 
   if (_event.value.id && _event.value.id !== 'duplicate') {
-    updateEvent()
+    const booking = bookingOf(props.event)
+    if (movesBooking(booking, _event.value)) {
+      confirmBookingMove(booking, updateEvent)
+    } else {
+      updateEvent()
+    }
   } else {
     createEvent()
   }
@@ -464,7 +473,9 @@ function deleteEvent() {
 
   $dialog({
     title: __('Delete'),
-    message: __('Are you sure you want to delete this event?'),
+    message: deleteEventMessage(
+      _event.value.id === props.event?.name ? bookingOf(props.event) : null,
+    ),
     actions: [
       {
         label: __('Delete'),

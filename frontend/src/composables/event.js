@@ -3,6 +3,7 @@ import { dayjs, createListResource } from 'frappe-ui'
 import { sameArrayContents } from '@/utils'
 import { computed, ref } from 'vue'
 import { allTimeSlots } from '@/components/Calendar/utils'
+import { createDialog } from '@/utils/dialogs'
 
 // Lists events the usual way, plus ones linked to a lead or deal you can read,
 // so a teammate's meeting on a lead shows on that lead (see crm/api/event.py)
@@ -289,4 +290,55 @@ export function parseEventDoc(doc) {
         }
       : null,
   }
+}
+
+// A meeting booked from a booking page emails its guest when it's moved or
+// deleted (crm.api.booking.sync_booking_from_event), so the CRM says so first.
+// `booking` is { guest, startsOn, endsOn } as the meeting was loaded.
+
+export function bookingOf(doc) {
+  return doc?.booking_guest
+    ? { guest: doc.booking_guest, startsOn: doc.starts_on, endsOn: doc.ends_on }
+    : null
+}
+
+export function movesBooking(booking, { fromDate, fromTime, toDate, toTime }) {
+  if (!booking) return false
+  const same = (a, b) => dayjs(a).isSame(dayjs(b), 'minute')
+  return (
+    !same(booking.startsOn, `${fromDate} ${fromTime}`) ||
+    !same(booking.endsOn, `${toDate || fromDate} ${toTime}`)
+  )
+}
+
+export function confirmBookingMove(booking, onConfirm, onCancel = () => {}) {
+  let confirmed = false
+  createDialog({
+    title: __('Move this meeting?'),
+    message: __(
+      '{0} booked this time from a booking page and will get an email with the new time.',
+      [booking.guest],
+    ),
+    actions: [
+      {
+        label: __('Move and email'),
+        variant: 'solid',
+        onClick: (close) => {
+          confirmed = true
+          close()
+          onConfirm()
+        },
+      },
+    ],
+    onClose: () => !confirmed && onCancel(),
+  })
+}
+
+export function deleteEventMessage(booking) {
+  return booking
+    ? __(
+        'This cancels the booking, and {0} will get an email saying the meeting is cancelled.',
+        [booking.guest],
+      )
+    : __('Are you sure you want to delete this event?')
 }
