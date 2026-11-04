@@ -12,7 +12,8 @@
 	<strong>{{ title|e }}</strong><br />
 	{{ when|e }}<br />
 	{{ _("With") }} {{ with_name|e }}<br />
-	{% if location %}{{ location|e }}{% endif %}
+	{% if link and action != "cancelled" %}<a href="{{ link|e }}">{{ link|e }}</a>
+	{% elif location %}{{ location|e }}{% endif %}
 </p>
 {% if note %}<p><strong>{{ note|e }}</strong></p>{% endif %}
 {% if reason %}<p>{{ _("Reason") }}: {{ reason|e }}</p>{% endif %}
