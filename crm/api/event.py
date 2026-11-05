@@ -18,8 +18,9 @@ import hashlib
 from datetime import datetime, timedelta
 
 import frappe
+from frappe import _
 from frappe.query_builder.functions import Max
-from frappe.utils import add_to_date, now_datetime
+from frappe.utils import add_to_date, cint, now_datetime
 
 
 def trigger_offset_event_notifications():
@@ -457,3 +458,90 @@ def _send_system_notification(notification, interval):
 	recipients = {notification.get("owner"), *notification.get("event_participants", [])}
 	for user in _claim_new_recipients(notification, interval, sorted(recipients - {None})):
 		frappe.publish_realtime("event_notification", notification, user=user)
+
+
+# Seeing events. Frappe shows a private Event only to its owner and participants, so a
+# meeting a host has on a lead (a booking, say) would be invisible on that lead to the
+# rest of the team. These endpoints stand in for frappe.client.get_list on the CRM's
+# event lists: anything the user may see as usual, plus events linked to a lead or deal
+# the user can read. Writes still go through Frappe's own Event permissions.
+
+EVENT_DOCTYPES = ("Event", "Event Participants", "Event Notifications")
+MAX_EVENT_ROWS = 2000
+
+
+def can_see_event(row: dict) -> bool:
+	if frappe.has_permission("Event", "read", doc=row["name"]):
+		return True
+	doctype, name = row.get("reference_doctype"), row.get("reference_docname")
+	return doctype in ("CRM Lead", "CRM Deal") and bool(name) and frappe.has_permission(doctype, "read", name)
+
+
+@frappe.whitelist()
+def get_event_list(
+	doctype: str,
+	fields: list | str | None = None,
+	filters: dict | list | str | None = None,
+	or_filters: dict | list | str | None = None,
+	order_by: str | None = None,
+	limit: int | None = None,
+	limit_start: int = 0,
+	parent: str | None = None,
+	**kwargs,
+) -> list[dict]:
+	if doctype not in EVENT_DOCTYPES:
+		frappe.throw(_("Not an event list"), frappe.PermissionError)
+	frappe.has_permission("Event", "read", throw=True)
+	# each row gets its own permission check, so never load an unbounded list
+	limit = min(cint(limit) or MAX_EVENT_ROWS, MAX_EVENT_ROWS)
+	fields = frappe.parse_json(fields) or ["*"]
+	rows = frappe.get_all(
+		doctype,
+		# the visibility check needs the event's link
+		fields=fields
+		if doctype != "Event" or "*" in fields
+		else list(dict.fromkeys([*fields, "name", "reference_doctype", "reference_docname"])),
+		filters=frappe.parse_json(filters),
+		or_filters=frappe.parse_json(or_filters),
+		order_by=order_by or "creation desc",
+		limit=limit,
+		start=limit_start,
+	)
+	if doctype == "Event":
+		return add_booking_guests([row for row in rows if can_see_event(row)])
+
+	# participants and notifications follow the events they belong to
+	parents = {row.get("parent") for row in rows}
+	events = frappe.get_all(
+		"Event",
+		filters={"name": ["in", list(parents) or [""]]},
+		fields=["name", "reference_doctype", "reference_docname"],
+	)
+	visible = {e.name for e in events if can_see_event(e)}
+	return [row for row in rows if row.get("parent") in visible]
+
+
+@frappe.whitelist()
+def get_event(name: str) -> dict:
+	"""An event to look at, under the same rule as get_event_list."""
+	row = frappe.db.get_value("Event", name, ["name", "reference_doctype", "reference_docname"], as_dict=True)
+	if not row or not can_see_event(row):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	return add_booking_guests([frappe.get_doc("Event", name).as_dict()])[0]
+
+
+def add_booking_guests(rows: list[dict]) -> list[dict]:
+	"""Mark meetings booked from a booking page with the guest's email: moving or
+	deleting one emails them, so the CRM asks first."""
+	names = [row.get("name") for row in rows if row.get("name")]
+	guests = dict(
+		frappe.get_all(
+			"CRM Booking",
+			filters={"event": ["in", names or [""]], "status": "Confirmed"},
+			fields=["event", "guest_email"],
+			as_list=True,
+		)
+	)
+	for row in rows:
+		row["booking_guest"] = guests.get(row.get("name"))
+	return rows

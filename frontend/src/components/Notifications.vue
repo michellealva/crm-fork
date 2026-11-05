@@ -44,6 +44,12 @@
                 :class="[n.read ? 'bg-transparent' : 'bg-surface-gray-10']"
               />
               <WhatsAppIcon v-if="n.type == 'WhatsApp'" class="size-7" />
+              <div
+                v-else-if="n.type == 'Booking'"
+                class="flex size-7 items-center justify-center rounded-full bg-surface-gray-2"
+              >
+                <CalendarIcon class="size-4 text-ink-gray-6" />
+              </div>
               <UserAvatar v-else :user="n.from_user.name" size="lg" />
             </div>
             <div>
@@ -81,6 +87,7 @@
 </template>
 <script setup>
 import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
+import CalendarIcon from '@/components/Icons/CalendarIcon.vue'
 import MarkAsDoneIcon from '@/components/Icons/MarkAsDoneIcon.vue'
 import NotificationsIcon from '@/components/Icons/NotificationsIcon.vue'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
@@ -90,6 +97,7 @@ import {
   notifications,
   notificationsStore,
 } from '@/stores/notifications'
+import { useEventNotificationAlert } from '@/data/notifications'
 import { globalStore } from '@/stores/global'
 import { timeAgo, sanitizeHTML } from '@/utils'
 import { onClickOutside } from '@vueuse/core'
@@ -98,6 +106,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 
 const { $socket } = globalStore()
 const { mark_as_read, toggle, mark_doc_as_read } = notificationsStore()
+const { handleEventNotification } = useEventNotificationAlert()
 const { capture } = useTelemetry()
 
 const target = ref(null)
@@ -123,10 +132,12 @@ function markAllAsRead() {
 
 onBeforeUnmount(() => {
   $socket.off('crm_notification')
+  $socket.off('event_notification')
 })
 
 onMounted(() => {
   $socket.on('crm_notification', () => notifications.reload())
+  $socket.on('event_notification', (data) => handleEventNotification(data))
 })
 
 function getRoute(notification) {

@@ -100,6 +100,9 @@ def get_hash(notification):
 	if notification.type == "WhatsApp":
 		_hash = "#whatsapp"
 
+	if notification.type == "Booking":
+		_hash = "#events"
+
 	if notification.type == "Assignment" and notification.notification_type_doctype == "CRM Task":
 		_hash = "#tasks"
 		if "has been removed by" in notification.message:
